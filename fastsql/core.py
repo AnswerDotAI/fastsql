@@ -35,3 +35,10 @@ def create(self: Database, tname, pk: str|None=None, **cols):
     # Insert primary key at the beginning
     if pkcol is not None: columns.insert(0, pkcol)
     return Table(tname, self.metadata, *columns)
+
+# %% ../nbs/00_core.ipynb 13
+@patch(as_prop=True)
+def t(self: Database):
+    """Returns a list of all tables in the database"""
+    # TODO - return a Table object rather than a string
+    return self.metadata.tables
