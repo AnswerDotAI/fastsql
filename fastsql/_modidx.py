@@ -7,5 +7,5 @@ d = { 'settings': { 'branch': 'main',
                 'lib_path': 'fastsql'},
   'syms': { 'fastsql.core': { 'fastsql.core.Database': ('core.html#database', 'fastsql/core.py'),
                               'fastsql.core.Database.__init__': ('core.html#database.__init__', 'fastsql/core.py'),
-                              'fastsql.core.Database.create_table': ('core.html#database.create_table', 'fastsql/core.py'),
+                              'fastsql.core.Database.create': ('core.html#database.create', 'fastsql/core.py'),
                               'fastsql.core.create_column': ('core.html#create_column', 'fastsql/core.py')}}}

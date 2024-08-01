@@ -20,7 +20,6 @@ class Database:
 type_map = {
     int: Integer,
     str: String,
-    float: Float,
     bool: Boolean
 }
 def create_column(name, typ, primary=False):
@@ -28,7 +27,7 @@ def create_column(name, typ, primary=False):
 
 # %% ../nbs/00_core.ipynb 11
 @patch
-def create_table(self: Database, tname, pk: str|None=None, **cols):
+def create(self: Database, tname, pk: str|None=None, **cols):
     pkcol = None
     # Set primary key, popping from cols
     if pk is not None: pkcol = create_column(pk, cols.pop(pk), primary=True)
