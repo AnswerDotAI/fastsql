@@ -16,7 +16,7 @@ class Database:
         self.metadata = MetaData()
         self.metadata.create_all(self.engine)
 
-# %% ../nbs/00_core.ipynb 7
+# %% ../nbs/00_core.ipynb 8
 type_map = {
     int: Integer,
     str: String,
@@ -26,7 +26,7 @@ type_map = {
 def create_column(name, typ, primary=False):
     return Column(name, type_map[typ], primary_key=primary)
 
-# %% ../nbs/00_core.ipynb 8
+# %% ../nbs/00_core.ipynb 11
 @patch
 def create_table(self: Database, tname, pk: str|None=None, **cols):
     pkcol = None
