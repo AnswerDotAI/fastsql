@@ -5,4 +5,7 @@ d = { 'settings': { 'branch': 'main',
                 'doc_host': 'https://pydanny.github.io',
                 'git_url': 'https://github.com/pydanny/fastsql',
                 'lib_path': 'fastsql'},
-  'syms': {'fastsql.core': {'fastsql.core.foo': ('core.html#foo', 'fastsql/core.py')}}}
+  'syms': { 'fastsql.core': { 'fastsql.core.Database': ('core.html#database', 'fastsql/core.py'),
+                              'fastsql.core.Database.__init__': ('core.html#database.__init__', 'fastsql/core.py'),
+                              'fastsql.core.Database.create_table': ('core.html#database.create_table', 'fastsql/core.py'),
+                              'fastsql.core.create_column': ('core.html#create_column', 'fastsql/core.py')}}}
