@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "fastsql"
+  site-url: "https://pydanny.github.io/fastsql"
+  description: "A fun wrapper for SQL"
+  repo-branch: main
+  repo-url: "https://github.com/pydanny/fastsql"
