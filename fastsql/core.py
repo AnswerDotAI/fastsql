@@ -6,6 +6,7 @@ __all__ = ['type_map', 'Database', 'create_column']
 # %% ../nbs/00_core.ipynb 4
 from sqlalchemy import *
 from fastcore.utils import *
+from dataclasses import dataclass, is_dataclass, asdict
 
 __all__ = []
 
@@ -26,12 +27,17 @@ def create_column(name, typ, primary=False):
     return Column(name, type_map[typ], primary_key=primary)
 
 # %% ../nbs/00_core.ipynb 10
+def _create_column_from_dataclass_field(name, field, primary=False):
+    return create_column(name, field.type, primary)
+
+# %% ../nbs/00_core.ipynb 11
 @patch
-def create(self: Database, tname, pk: str|None=None, **cols):
+def create(self: Database, cls: dataclass, pk: str|None=None):
     pkcol = None
+    cols = {k: v for k,v in cls.__dataclass_fields__.items()}
     # Set primary key, popping from cols
-    if pk is not None: pkcol = create_column(pk, cols.pop(pk), primary=True)
-    columns = [create_column(name, typ) for name, typ in cols.items()]
+    if pk is not None: pkcol = _create_column_from_dataclass_field(pk, cols.pop(pk), primary=True)
+    columns = [_create_column_from_dataclass_field(k, v) for k,v in cols.items()]
     # Insert primary key at the beginning
     if pkcol is not None: columns.insert(0, pkcol)
-    return Table(tname, self.metadata, *columns)
+    return Table(cls.__name__, self.metadata, *columns)

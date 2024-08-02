@@ -8,4 +8,6 @@ d = { 'settings': { 'branch': 'main',
   'syms': { 'fastsql.core': { 'fastsql.core.Database': ('core.html#database', 'fastsql/core.py'),
                               'fastsql.core.Database.__init__': ('core.html#database.__init__', 'fastsql/core.py'),
                               'fastsql.core.Database.create': ('core.html#database.create', 'fastsql/core.py'),
+                              'fastsql.core._create_column_from_dataclass_field': ( 'core.html#_create_column_from_dataclass_field',
+                                                                                    'fastsql/core.py'),
                               'fastsql.core.create_column': ('core.html#create_column', 'fastsql/core.py')}}}
