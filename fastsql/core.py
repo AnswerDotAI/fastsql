@@ -5,6 +5,9 @@ __all__ = ['type_map', 'Database', 'DBTable', 'create_column']
 
 # %% ../nbs/00_core.ipynb 4
 from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, create_engine
+from sqlalchemy import insert as _insert 
+from sqlalchemy.orm import Session
+
 from fastcore.utils import *
 from dataclasses import dataclass, is_dataclass, asdict
 
@@ -13,26 +16,31 @@ __all__ = []
 # %% ../nbs/00_core.ipynb 5
 class Database:
     def __init__(self, conn_str):
+        self.conn_str = conn_str
         self.engine = create_engine(conn_str)
         self.metadata = MetaData()
         self.metadata.create_all(self.engine)
+
+    def __repr__(self):
+        return f"Database({self.conn_str})"
 
 # %% ../nbs/00_core.ipynb 7
 from typing import Any
 
 
 class DBTable:
-    def __init__(self, table: Table):
-        self.table = table
+    def __init__(self, table: Table, database: Database):
+        self._table = table
+        self._database = database
 
     def __getitem__(self, name: str) -> Any:
-        return self.table.__getattribute__(name)
+        return self._table.c.__getattribute__(name)
     
     def __str__(self):
-        return self.table.name
+        return self._table.name
     
     def __repr__(self) -> str:
-        return self.table.name
+        return self._table.name
 
 # %% ../nbs/00_core.ipynb 8
 type_map = {
@@ -58,4 +66,13 @@ def create(self: Database, cls: dataclass, pk: str|None=None):
     # Insert primary key at the beginning
     if pkcol is not None: columns.insert(0, pkcol)
     # return Table(cls.__name__, self.metadata, *columns)
-    return DBTable(Table(cls.__name__, self.metadata, *columns))
+    return DBTable(Table(cls.__name__, self.metadata, *columns), self)
+
+# %% ../nbs/00_core.ipynb 15
+@patch
+def insert(self: DBTable, **kwargs):
+    with Session(self._database.engine) as session:
+        stmt = _insert(self._table).values(**kwargs)
+        result = session.execute(stmt)
+        session.commit()
+    return result
