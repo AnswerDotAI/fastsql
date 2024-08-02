@@ -9,14 +9,14 @@ from fastcore.utils import *
 
 __all__ = []
 
-# %% ../nbs/00_core.ipynb 6
+# %% ../nbs/00_core.ipynb 5
 class Database:
     def __init__(self, conn_str):
         self.engine = create_engine(conn_str)
         self.metadata = MetaData()
         self.metadata.create_all(self.engine)
 
-# %% ../nbs/00_core.ipynb 8
+# %% ../nbs/00_core.ipynb 7
 type_map = {
     int: Integer,
     str: String,
@@ -25,7 +25,7 @@ type_map = {
 def create_column(name, typ, primary=False):
     return Column(name, type_map[typ], primary_key=primary)
 
-# %% ../nbs/00_core.ipynb 11
+# %% ../nbs/00_core.ipynb 10
 @patch
 def create(self: Database, tname, pk: str|None=None, **cols):
     pkcol = None
@@ -35,10 +35,3 @@ def create(self: Database, tname, pk: str|None=None, **cols):
     # Insert primary key at the beginning
     if pkcol is not None: columns.insert(0, pkcol)
     return Table(tname, self.metadata, *columns)
-
-# %% ../nbs/00_core.ipynb 13
-@patch(as_prop=True)
-def t(self: Database):
-    """Returns a list of all tables in the database"""
-    # TODO - return a Table object rather than a string
-    return self.metadata.tables
