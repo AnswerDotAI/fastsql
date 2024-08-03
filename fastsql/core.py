@@ -4,12 +4,13 @@
 __all__ = ['type_map', 'Database', 'DBTable', 'create_column']
 
 # %% ../nbs/00_core.ipynb 4
-from sqlalchemy import MetaData, Table, Column, Integer, String, ForeignKey, create_engine
-from sqlalchemy import insert as _insert 
+from dataclasses import dataclass, is_dataclass, asdict
+from typing import Any
+
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from fastcore.utils import *
-from dataclasses import dataclass, is_dataclass, asdict
 
 __all__ = []
 
@@ -17,19 +18,16 @@ __all__ = []
 class Database:
     def __init__(self, conn_str):
         self.conn_str = conn_str
-        self.engine = create_engine(conn_str)
-        self.metadata = MetaData()
+        self.engine = sa.create_engine(conn_str)
+        self.metadata = sa.MetaData()
         self.metadata.create_all(self.engine)
 
     def __repr__(self):
         return f"Database({self.conn_str})"
 
 # %% ../nbs/00_core.ipynb 7
-from typing import Any
-
-
 class DBTable:
-    def __init__(self, table: Table, database: Database):
+    def __init__(self, table: sa.Table, database: Database):
         self._table = table
         self._database = database
 
@@ -42,22 +40,22 @@ class DBTable:
     def __repr__(self) -> str:
         return self._table.name
 
-# %% ../nbs/00_core.ipynb 8
+# %% ../nbs/00_core.ipynb 9
 type_map = {
-    int: Integer,
-    str: String,
-    bool: Boolean
+    int: sa.Integer,
+    str: sa.String,
+    bool: sa.Boolean
 }
 def create_column(name, typ, primary=False):
-    return Column(name, type_map[typ], primary_key=primary)
+    return sa.Column(name, type_map[typ], primary_key=primary)
 
-# %% ../nbs/00_core.ipynb 11
+# %% ../nbs/00_core.ipynb 12
 def _create_column_from_dataclass_field(name, field, primary=False):
     return create_column(name, field.type, primary)
 
-# %% ../nbs/00_core.ipynb 12
+# %% ../nbs/00_core.ipynb 13
 @patch
-def create(self: Database, cls: dataclass, pk: str|None=None):
+def create(self: Database, cls: dataclass, pk: str|None=None) -> DBTable:
     pkcol = None
     cols = {k: v for k,v in cls.__dataclass_fields__.items()}
     # Set primary key, popping from cols
@@ -66,13 +64,13 @@ def create(self: Database, cls: dataclass, pk: str|None=None):
     # Insert primary key at the beginning
     if pkcol is not None: columns.insert(0, pkcol)
     # return Table(cls.__name__, self.metadata, *columns)
-    return DBTable(Table(cls.__name__, self.metadata, *columns), self)
+    return DBTable(sa.Table(cls.__name__, self.metadata, *columns), self)
 
-# %% ../nbs/00_core.ipynb 15
+# %% ../nbs/00_core.ipynb 16
 @patch
 def insert(self: DBTable, **kwargs):
     with Session(self._database.engine) as session:
-        stmt = _insert(self._table).values(**kwargs)
+        stmt = sa.insert(self._table).values(**kwargs)
         result = session.execute(stmt)
         session.commit()
     return result
