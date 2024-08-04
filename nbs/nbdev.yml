@@ -3,7 +3,7 @@ project:
 
 website:
   title: "fastsql"
-  site-url: "https://pydanny.github.io/fastsql"
-  description: "A fun wrapper for SQL"
+  site-url: "https://fastai.github.io/fastsql"
+  description: "A MiniDataAPI spec implementation for SQLAlchemy V2"
   repo-branch: main
-  repo-url: "https://github.com/pydanny/fastsql"
+  repo-url: "https://github.com/fastai/fastsql"
