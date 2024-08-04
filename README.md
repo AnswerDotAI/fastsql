@@ -64,12 +64,26 @@ db.print_schema()
       - *name: VARCHAR
       - pwd: VARCHAR
 
+Does a table exist?
+
+``` python
+users.exists()
+```
+
+    True
+
+## Manipulating data
+
+> Creating, reading, updating, and deleting records in database tables.
+
 Let’s create some dataclass objects representing users and todos.
 
 ``` python
 u0 = User('jph','foo')
 u1 = User('rlt','bar')
 t0 = Todo('do it', 'jph')
+t1 = Todo('build it', 'jph')
+t2 = Todo('write book', 'rlt')
 ```
 
 Let’s convert these dataclass objects into database records. To do that
@@ -79,6 +93,57 @@ we insert them into their tables using the aply named `insert` method:
 users.insert(u0)
 users.insert(u1)
 todos.insert(t0)
+todos.insert(t1)
+todos.insert(t2)
+```
+
+    Todo(title='write book', name='rlt', done=False, details='', id=3)
+
+Display all the user records.
+
+``` python
+for user in users():
+    print(user)
+```
+
+    User(name='jph', pwd='foo')
+    User(name='rlt', pwd='bar')
+
+Use where statement to filter records, in this case only jph’s todos.
+
+``` python
+for todo in todos(where="name = :name", name="jph"):
+    print(todo)
 ```
 
     Todo(title='do it', name='jph', done=False, details='', id=1)
+    Todo(title='build it', name='jph', done=False, details='', id=2)
+
+Look only for those records with the word `it` in it.
+
+``` python
+for todo in todos(where="title LIKE :title", title="%% it%%"):
+    print(todo)
+```
+
+    Todo(title='do it', name='jph', done=False, details='', id=1)
+    Todo(title='build it', name='jph', done=False, details='', id=2)
+
+Fetch a record just by the primary key.
+
+``` python
+user = users['rlt']
+user
+```
+
+    User(name='rlt', pwd='bar')
+
+Change a value in a record.
+
+``` python
+user.pwd = 'baz'
+users.update(user)
+users['rlt']
+```
+
+    User(name='rlt', pwd='baz')
