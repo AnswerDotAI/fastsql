@@ -3,18 +3,18 @@
 # %% auto 0
 __all__ = ['Database', 'DBTable']
 
-# %% ../nbs/00_core.ipynb 2
+# %% ../nbs/00_core.ipynb 5
 from dataclasses import dataclass,is_dataclass,asdict,MISSING
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from fastcore.utils import *
 
-# %% ../nbs/00_core.ipynb 5
+# %% ../nbs/00_core.ipynb 8
 _type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean}
 def _column(name, typ, primary=False):
     return sa.Column(name, _type_map[typ], primary_key=primary)
 
-# %% ../nbs/00_core.ipynb 6
+# %% ../nbs/00_core.ipynb 9
 class Database:
     "A connection to a SQLAlchemy database"
     def __init__(self, conn_str):
@@ -27,7 +27,7 @@ class Database:
     @property
     def conn(self): return self.engine.connect()
 
-# %% ../nbs/00_core.ipynb 8
+# %% ../nbs/00_core.ipynb 11
 class DBTable:
     "A connection to a SQLAlchemy table, created if needed"
     def __init__(self, table: sa.Table, database: Database, cls):
@@ -39,7 +39,7 @@ class DBTable:
     @property
     def conn(self): return self.db.conn
 
-# %% ../nbs/00_core.ipynb 9
+# %% ../nbs/00_core.ipynb 12
 @patch
 def create(self:Database, cls, pk:str|None=None):
     "Get a table object, creating in DB if needed"
@@ -49,7 +49,7 @@ def create(self:Database, cls, pk:str|None=None):
     tbl = sa.Table(cls.__name__, self.meta, *columns)
     return DBTable(tbl, self, cls)
 
-# %% ../nbs/00_core.ipynb 11
+# %% ../nbs/00_core.ipynb 14
 @patch
 def print_schema(self:Database):
     "Show all tables and columns"
@@ -61,24 +61,26 @@ def print_schema(self:Database):
             pk_marker = '*' if column['name'] in pk_cols else ''
             print(f"  - {pk_marker}{column['name']}: {column['type']}")
 
-# %% ../nbs/00_core.ipynb 13
+# %% ../nbs/00_core.ipynb 16
 @patch
 def exists(self:DBTable):
     "Check if this table exists in the DB"
     return sa.inspect(self.db.engine).has_table(self.table.name)
 
-# %% ../nbs/00_core.ipynb 16
+# %% ../nbs/00_core.ipynb 19
+def _wanted(obj): return {k:v for k,v in asdict(obj).items() if v not in (None,MISSING)}
+
+# %% ../nbs/00_core.ipynb 20
 @patch
 def insert(self:DBTable, obj):
     "Insert an object into this table, and return it"
-    d = {k:v for k,v in asdict(obj).items() if v not in (None,MISSING)}
     with self.conn as conn:
-        result = conn.execute(sa.insert(self.table).values(**d).returning(*self.table.columns))
+        result = conn.execute(sa.insert(self.table).values(**_wanted(obj)).returning(*self.table.columns))
         row = result.one()  # Consume the result set
         conn.commit()
         return self.cls(**row._asdict())
 
-# %% ../nbs/00_core.ipynb 19
+# %% ../nbs/00_core.ipynb 23
 @patch
 def __call__(self:DBTable, where:str|None=None, where_args:Iterable|dict|None=None,
              order_by:str|None=None, limit:int|None=None, offset:int|None=None, **kw):
@@ -93,26 +95,40 @@ def __call__(self:DBTable, where:str|None=None, where_args:Iterable|dict|None=No
         rows = conn.execute(query).all()
         return [self.cls(**row._asdict()) for row in rows]
 
-# %% ../nbs/00_core.ipynb 23
+# %% ../nbs/00_core.ipynb 27
 @patch
-def _pk_cond(self:DBTable, key):
+def _pk_where(self:DBTable, meth,key):
     if not isinstance(key,tuple): key = (key,)
     pkv = zip(self.table.primary_key.columns, key)
-    return sa.and_(*[col==val for col,val in pkv])
+    cond = sa.and_(*[col==val for col,val in pkv])
+    return getattr(self.table,meth)().where(cond)
 
-# %% ../nbs/00_core.ipynb 24
+# %% ../nbs/00_core.ipynb 28
 @patch
 def __getitem__(self:DBTable, key):
     "Get item with PK `key`"
     with self.conn as conn:
-        result = conn.execute(self.table.select().where(self._pk_cond(key))).first()
+        qry = self._pk_where('select', key)
+        result = conn.execute(qry).first()
     return self.cls(**result._asdict()) if result else None
 
-# %% ../nbs/00_core.ipynb 26
+# %% ../nbs/00_core.ipynb 30
+@patch
+def update(self:DBTable, obj):
+    d = _wanted(obj)
+    pks = tuple(d[k.name] for k in self.table.primary_key)
+    with self.conn as conn:
+        qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
+        result = conn.execute(qry)
+        row = result.one()
+        conn.commit()
+        return self.cls(**row._asdict())
+
+# %% ../nbs/00_core.ipynb 32
 @patch
 def delete(self:DBTable, key):
     "Delete item with PK `key` and return count deleted"
     with self.conn as conn:
-        result = conn.execute(self.table.delete().where(self._pk_cond(key)))
+        result = conn.execute(self._pk_where('delete', key))
         conn.commit()
         return result.rowcount
