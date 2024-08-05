@@ -2,8 +2,8 @@ project:
   output-dir: _docs
 
 website:
-  title: "fastsql"
-  site-url: "https://fastai.github.io/fastsql"
+  title: "fastalchemy"
+  site-url: "https://fastai.github.io/fastalchemy"
   description: "A MiniDataAPI spec implementation for SQLAlchemy V2"
   repo-branch: main
-  repo-url: "https://github.com/fastai/fastsql"
+  repo-url: "https://github.com/fastai/fastalchemy"
