@@ -5,8 +5,9 @@
 
 ## Install
 
+Clone the repository and install
 ``` sh
-pip install fastalchemy
+pip install .
 ```
 
 ## How to use
