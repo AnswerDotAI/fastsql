@@ -43,8 +43,7 @@ class DBTable:
 
 # %% ../00_core.ipynb 9
 _type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean}
-def _column(name, typ, primary=False):
-    return sa.Column(name, _type_map[typ], primary_key=primary)
+def _column(name, typ, primary=False): return sa.Column(name, _type_map[typ], primary_key=primary)
 
 # %% ../00_core.ipynb 10
 @patch
@@ -54,20 +53,22 @@ def create(self:Database, cls:type, pk='id', name:str|None=None):
     mk_dataclass(cls)
     if name is None: name = camel2snake(cls.__name__)
     cols = [_column(o.name, o.type, primary=o.name in pk) for o in fields(cls)]
-    tbl = sa.Table(name, self.meta, *cols)
+    tbl = sa.Table(name, self.meta, *cols, extend_existing=True)
     return DBTable(tbl, self, cls)
 
 # %% ../00_core.ipynb 12
 @patch
-def print_schema(self:Database):
+def schema(self:Database):
     "Show all tables and columns"
     inspector = sa.inspect(self.engine)
+    res = ''
     for table_name in inspector.get_table_names():
-        print(f"Table: {table_name}")
+        res += f"Table: {table_name}\n"
         pk_cols = inspector.get_pk_constraint(table_name)['constrained_columns']
         for column in inspector.get_columns(table_name):
             pk_marker = '*' if column['name'] in pk_cols else '-'
-            print(f"  {pk_marker} {column['name']}: {column['type']}")
+            res += f"  {pk_marker} {column['name']}: {column['type']}\n"
+    return res
 
 # %% ../00_core.ipynb 14
 @patch
