@@ -8,6 +8,7 @@ from dataclasses import dataclass,is_dataclass,asdict,MISSING,fields
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from fastcore.utils import *
+from fastcore.test import test_fail
 from itertools import starmap
 
 # %% ../00_core.ipynb 6
