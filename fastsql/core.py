@@ -6,10 +6,12 @@ __all__ = ['Database', 'DBTable', 'NotFoundError']
 # %% ../00_core.ipynb 2
 from dataclasses import dataclass,is_dataclass,asdict,MISSING,fields
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from fastcore.utils import *
 from fastcore.test import test_fail
 from itertools import starmap
+from functools import wraps
+from contextlib import contextmanager
 
 # %% ../00_core.ipynb 6
 class Database:
@@ -20,10 +22,23 @@ class Database:
         self.meta = sa.MetaData()
         self.meta.reflect(bind=self.engine)
         self.meta.bind = self.engine
-        self.conn = self.engine.connect()
-        self.meta.conn = self.conn
-    
-    def execute(self, st, params=None, opts=None): return self.conn.execute(st, params, execution_options=opts)
+        self.Session = sessionmaker(bind=self.engine)
+
+    @contextmanager
+    def session_scope(self):
+        session = self.Session()
+        try:
+            yield session
+            session.commit()
+        except:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def execute(self, st, params=None, opts=None):
+        with self.session_scope() as session:
+            return session.execute(st, params, execution_options=opts)
 
     def __repr__(self): return f"Database({self.conn_str})"
 
@@ -38,9 +53,6 @@ class DBTable:
     
     @property
     def t(self)->tuple: return self.table,self.table.c
-    
-    @property
-    def conn(self): return self.db.conn
 
 # %% ../00_core.ipynb 9
 _type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean}
@@ -80,19 +92,29 @@ def exists(self:DBTable):
 # %% ../00_core.ipynb 17
 def _wanted(obj): return {k:v for k,v in asdict(obj).items() if v not in (None,MISSING)}
 
+# New decorator
+def with_session(method):
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self.db.session_scope() as session:
+            return method(self, session, *args, **kwargs)
+    return wrapper
+
 # %% ../00_core.ipynb 18
 @patch
-def insert(self:DBTable, obj):
+@with_session
+def insert(self:DBTable, session, obj):
     "Insert an object into this table, and return it"
-    result = self.conn.execute(sa.insert(self.table).values(**_wanted(obj)).returning(*self.table.columns))
-    row = result.one()  # Consume the result set
-    self.conn.commit()
+    result = session.execute(sa.insert(self.table).values(**_wanted(obj)).returning(*self.table.columns))
+    row = result.one()
     return self.cls(**row._asdict())
 
 # %% ../00_core.ipynb 21
 @patch
+@with_session
 def __call__(
     self:DBTable,
+    session,
     where:str|None=None,  # SQL where fragment to use, for example `id > ?`
     where_args: Iterable|dict|NoneType=None, # Parameters to use with `where`; iterable for `id>?`, or dict for `id>:id`
     order_by: str|None=None, # Column or fragment of SQL to order by
@@ -111,7 +133,7 @@ def __call__(
     if order_by: query = query.order_by(sa.text(order_by))
     if limit is not None: query = query.limit(limit)
     if offset is not None: query = query.offset(offset)
-    rows = self.conn.execute(query).all()
+    rows = session.execute(query).all()
     return [self.cls(**row._asdict()) for row in rows]
 
 # %% ../00_core.ipynb 25
@@ -127,30 +149,31 @@ class NotFoundError(Exception): pass
 
 # %% ../00_core.ipynb 27
 @patch
-def __getitem__(self:DBTable, key):
+@with_session
+def __getitem__(self:DBTable, session, key):
     "Get item with PK `key`"
     qry = self._pk_where('select', key)
-    result = self.conn.execute(qry).first()
+    result = session.execute(qry).first()
     if not result: raise NotFoundError()
     return self.cls(**result._asdict())
 
 # %% ../00_core.ipynb 29
 @patch
-def update(self:DBTable, obj):
+@with_session
+def update(self:DBTable, session, obj):
     d = _wanted(obj)
     pks = tuple(d[k.name] for k in self.table.primary_key)
     qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
-    result = self.conn.execute(qry)
+    result = session.execute(qry)
     row = result.one()
-    self.conn.commit()
     return self.cls(**row._asdict())
 
 # %% ../00_core.ipynb 31
 @patch
-def delete(self:DBTable, key):
+@with_session
+def delete(self:DBTable, session, key):
     "Delete item with PK `key` and return count deleted"
-    result = self.conn.execute(self._pk_where('delete', key))
-    self.conn.commit()
+    result = session.execute(self._pk_where('delete', key))
     return result.rowcount
 
 # %% ../00_core.ipynb 34
