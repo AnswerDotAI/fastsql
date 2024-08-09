@@ -16,7 +16,7 @@ class Database:
     "A connection to a SQLAlchemy database"
     def __init__(self, conn_str):
         self.conn_str = conn_str
-        self.engine = sa.create_engine(conn_str, pool_pre_ping=True)
+        self.engine = sa.create_engine(conn_str, pool_pre_ping=True, pool_recycle=300)
         self.meta = sa.MetaData()
         self.meta.reflect(bind=self.engine)
         self.meta.bind = self.engine
