@@ -91,7 +91,8 @@ def _wanted(obj): return {k:v for k,v in asdict(obj).items() if v not in (None,M
 @patch
 def insert(self:DBTable, obj):
     "Insert an object into this table, and return it"
-    result = self.conn.execute(sa.insert(self.table).values(**_wanted(obj)).returning(*self.table.columns))
+    d = {**_wanted(obj), **self.xtra_id}
+    result = self.conn.execute(sa.insert(self.table).values(**d).returning(*self.table.columns))
     row = result.one()  # Consume the result set
     self.conn.commit()
     return self.cls(**row._asdict())
