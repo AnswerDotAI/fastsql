@@ -4,8 +4,13 @@
 
 ## 2.0.1
 
-- Add `insert` xtra support
-- Switch from `[]` to `"`
+### New Features
+
+- `xtra` support in `insert` ([#10](https://github.com/AnswerDotAI/fastsql/issues/10))
+
+### Bugs Squashed
+
+- square brackets not accepted by all dbs ([#11](https://github.com/AnswerDotAI/fastsql/issues/11))
 
 
 ## 2.0.0
