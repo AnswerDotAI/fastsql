@@ -2,8 +2,8 @@
 
 d = { 'settings': { 'branch': 'main',
                 'doc_baseurl': '/fastsql',
-                'doc_host': 'https://fastai.github.io',
-                'git_url': 'https://github.com/fastai/fastsql',
+                'doc_host': 'https://answerdotai.github.io',
+                'git_url': 'https://github.com/answerdotai/fastsql',
                 'lib_path': 'fastsql'},
   'syms': { 'fastsql.core': { 'fastsql.core.Connection.sql': ('core.html#connection.sql', 'fastsql/core.py'),
                               'fastsql.core.CursorResult.tuples': ('core.html#cursorresult.tuples', 'fastsql/core.py'),
