@@ -8,7 +8,7 @@ from dataclasses import dataclass,is_dataclass,asdict,MISSING,fields
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from fastcore.utils import *
-from fastcore.test import test_fail
+from fastcore.test import test_fail,test_eq
 from itertools import starmap
 
 # %% ../00_core.ipynb 6
@@ -31,7 +31,7 @@ class Database:
 class DBTable:
     "A connection to a SQLAlchemy table, created if needed"
     def __init__(self, table: sa.Table, database: Database, cls):
-        self.table,self.db,self.cls = table,database,cls
+        self.table,self.db,self.cls,self.xtra_id = table,database,cls,{}
         table.create(self.db.engine, checkfirst=True)
 
     def __repr__(self) -> str: return self.table.name
@@ -40,7 +40,14 @@ class DBTable:
     def t(self)->tuple: return self.table,self.table.c
     
     @property
+    def pks(self)-> tuple: return tuple(self.table.primary_key) + tuple(self.table.c[o] for o in self.xtra_id.keys())
+    
+    @property
     def conn(self): return self.db.conn
+
+    def xtra(self, **kwargs):
+        "Set `xtra_id`"
+        self.xtra_id = kwargs
 
 # %% ../00_core.ipynb 9
 _type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean}
@@ -107,25 +114,34 @@ def __call__(
         columns = [sa.text(col.strip()) for col in select.split(',')]
         query = sa.select(*columns).select_from(self.table)
     if where_args: kw = {**kw, **where_args}
-    if kw: query = query.where(sa.text(where).bindparams(**kw))
+    xtra = self.xtra_id
+    if xtra:
+        xw = ' and '.join(f"[{k}] = {v!r}" for k,v in xtra.items())
+        where = f'{xw} and {where}' if where else xw
+    if where:
+        where = sa.text(where)
+        if kw: where = where.bindparams(**kw)
+        query = query.where(where)
     if order_by: query = query.order_by(sa.text(order_by))
     if limit is not None: query = query.limit(limit)
     if offset is not None: query = query.offset(offset)
     rows = self.conn.execute(query).all()
     return [self.cls(**row._asdict()) for row in rows]
 
-# %% ../00_core.ipynb 25
+# %% ../00_core.ipynb 28
 @patch
 def _pk_where(self:DBTable, meth,key):
     if not isinstance(key,tuple): key = (key,)
-    pkv = zip(self.table.primary_key.columns, key)
+    xtra = getattr(self, 'xtra_id', {})
+    pkv = zip(self.pks, key + tuple(xtra.values()))
     cond = sa.and_(*[col==val for col,val in pkv])
+#     print(cond.compile(compile_kwargs={"literal_binds": True}))
     return getattr(self.table,meth)().where(cond)
 
-# %% ../00_core.ipynb 26
+# %% ../00_core.ipynb 29
 class NotFoundError(Exception): pass
 
-# %% ../00_core.ipynb 27
+# %% ../00_core.ipynb 30
 @patch
 def __getitem__(self:DBTable, key):
     "Get item with PK `key`"
@@ -134,7 +150,7 @@ def __getitem__(self:DBTable, key):
     if not result: raise NotFoundError()
     return self.cls(**result._asdict())
 
-# %% ../00_core.ipynb 29
+# %% ../00_core.ipynb 33
 @patch
 def update(self:DBTable, obj):
     d = _wanted(obj)
@@ -145,7 +161,7 @@ def update(self:DBTable, obj):
     self.conn.commit()
     return self.cls(**row._asdict())
 
-# %% ../00_core.ipynb 31
+# %% ../00_core.ipynb 36
 @patch
 def delete(self:DBTable, key):
     "Delete item with PK `key` and return count deleted"
@@ -153,7 +169,7 @@ def delete(self:DBTable, key):
     self.conn.commit()
     return result.rowcount
 
-# %% ../00_core.ipynb 34
+# %% ../00_core.ipynb 39
 from fastcore.net import urlsave
 
 from collections import namedtuple
@@ -162,7 +178,7 @@ from sqlalchemy.sql.base import ReadOnlyColumnCollection
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.cursor import CursorResult
 
-# %% ../00_core.ipynb 35
+# %% ../00_core.ipynb 40
 @patch
 def __dir__(self:MetaData): return self._orig___dir__() + list(self.tables)
 
@@ -176,7 +192,7 @@ def _getattr_(self, n):
 
 MetaData.__getattr__ = _getattr_
 
-# %% ../00_core.ipynb 40
+# %% ../00_core.ipynb 45
 @patch
 def tuples(self:CursorResult, nm='Row'):
     "Get all results as named tuples"
@@ -196,13 +212,13 @@ def sql(self:MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
     return self.conn.sql(statement, *args, **kwargs)
 
-# %% ../00_core.ipynb 42
+# %% ../00_core.ipynb 47
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
-# %% ../00_core.ipynb 46
+# %% ../00_core.ipynb 51
 @patch
 def close(self:MetaData):
     "Close the connection"
