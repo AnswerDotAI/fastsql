@@ -117,7 +117,7 @@ def __call__(
     if where_args: kw = {**kw, **where_args}
     xtra = self.xtra_id
     if xtra:
-        xw = ' and '.join(f"[{k}] = {v!r}" for k,v in xtra.items())
+        xw = ' and '.join(f'"{k}" = {v!r}' for k,v in xtra.items())
         where = f'{xw} and {where}' if where else xw
     if where:
         where = sa.text(where)
