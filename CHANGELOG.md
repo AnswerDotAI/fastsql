@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 2.0.2
+
+### New Features
+
+- Support dict and kwarg update args ([#14](https://github.com/AnswerDotAI/fastsql/issues/14))
+
+
 ## 2.0.1
 
 ### New Features
