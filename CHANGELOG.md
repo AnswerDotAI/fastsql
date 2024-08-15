@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 2.0.3
+
+### New Features
+
+- Use new fastcore `UNSET` as `asdict` ([#18](https://github.com/AnswerDotAI/fastsql/issues/18))
+
+
 ## 2.0.2
 
 ### New Features
