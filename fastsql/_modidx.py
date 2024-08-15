@@ -35,5 +35,4 @@ d = { 'settings': { 'branch': 'main',
                                                                                  'fastsql/core.py'),
                               'fastsql.core.Table.get': ('core.html#table.get', 'fastsql/core.py'),
                               'fastsql.core._column': ('core.html#_column', 'fastsql/core.py'),
-                              'fastsql.core._getattr_': ('core.html#_getattr_', 'fastsql/core.py'),
-                              'fastsql.core._wanted': ('core.html#_wanted', 'fastsql/core.py')}}}
+                              'fastsql.core._getattr_': ('core.html#_getattr_', 'fastsql/core.py')}}}

@@ -4,7 +4,7 @@
 __all__ = ['Database', 'DBTable', 'NotFoundError']
 
 # %% ../00_core.ipynb 2
-from dataclasses import dataclass,is_dataclass,asdict,MISSING,fields
+from dataclasses import dataclass,is_dataclass,MISSING,fields
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from fastcore.utils import *
@@ -58,7 +58,7 @@ def _column(name, typ, primary=False): return sa.Column(name, _type_map[typ], pr
 def create(self:Database, cls:type, pk='id', name:str|None=None):
     "Get a table object, creating in DB if needed"
     pk = listify(pk)
-    mk_dataclass(cls)
+    flexiclass(cls)
     if name is None: name = camel2snake(cls.__name__)
     cols = [_column(o.name, o.type, primary=o.name in pk) for o in fields(cls)]
     tbl = sa.Table(name, self.meta, *cols, extend_existing=True)
@@ -85,22 +85,16 @@ def exists(self:DBTable):
     return sa.inspect(self.db.engine).has_table(self.table.name)
 
 # %% ../00_core.ipynb 17
-def _wanted(obj, allow_none=False):
-    if is_dataclass(obj): obj = asdict(obj)
-    exc = (MISSING,) if allow_none else (MISSING,None)
-    return {k:v for k,v in obj.items() if v not in exc}
-
-# %% ../00_core.ipynb 18
 @patch
 def insert(self:DBTable, obj):
     "Insert an object into this table, and return it"
-    d = {**_wanted(obj), **self.xtra_id}
+    d = {**asdict(obj), **self.xtra_id}
     result = self.conn.execute(sa.insert(self.table).values(**d).returning(*self.table.columns))
     row = result.one()  # Consume the result set
     self.conn.commit()
     return self.cls(**row._asdict())
 
-# %% ../00_core.ipynb 21
+# %% ../00_core.ipynb 20
 @patch
 def __call__(
     self:DBTable,
@@ -132,7 +126,7 @@ def __call__(
     rows = self.conn.execute(query).all()
     return [self.cls(**row._asdict()) for row in rows]
 
-# %% ../00_core.ipynb 28
+# %% ../00_core.ipynb 27
 @patch
 def _pk_where(self:DBTable, meth,key):
     if not isinstance(key,tuple): key = (key,)
@@ -142,10 +136,10 @@ def _pk_where(self:DBTable, meth,key):
 #     print(cond.compile(compile_kwargs={"literal_binds": True}))
     return getattr(self.table,meth)().where(cond)
 
-# %% ../00_core.ipynb 29
+# %% ../00_core.ipynb 28
 class NotFoundError(Exception): pass
 
-# %% ../00_core.ipynb 30
+# %% ../00_core.ipynb 29
 @patch
 def __getitem__(self:DBTable, key):
     "Get item with PK `key`"
@@ -154,11 +148,10 @@ def __getitem__(self:DBTable, key):
     if not result: raise NotFoundError()
     return self.cls(**result._asdict())
 
-# %% ../00_core.ipynb 33
+# %% ../00_core.ipynb 32
 @patch
-def update(self:DBTable, obj=None, allow_none=False, **kw):
-    d = {**_wanted(obj or {}, allow_none=allow_none), **kw} #, **self.xtra_id}
-#     print(d)
+def update(self:DBTable, obj=None, **kw):
+    d = {**asdict(obj or {}), **kw, **self.xtra_id}
     pks = tuple(d[k.name] for k in self.table.primary_key)
     qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
     result = self.conn.execute(qry)
@@ -166,7 +159,7 @@ def update(self:DBTable, obj=None, allow_none=False, **kw):
     self.conn.commit()
     return self.cls(**row._asdict())
 
-# %% ../00_core.ipynb 36
+# %% ../00_core.ipynb 35
 @patch
 def delete(self:DBTable, key):
     "Delete item with PK `key` and return count deleted"
@@ -174,7 +167,7 @@ def delete(self:DBTable, key):
     self.conn.commit()
     return result.rowcount
 
-# %% ../00_core.ipynb 39
+# %% ../00_core.ipynb 38
 from fastcore.net import urlsave
 
 from collections import namedtuple
@@ -183,7 +176,7 @@ from sqlalchemy.sql.base import ReadOnlyColumnCollection
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.cursor import CursorResult
 
-# %% ../00_core.ipynb 40
+# %% ../00_core.ipynb 39
 @patch
 def __dir__(self:MetaData): return self._orig___dir__() + list(self.tables)
 
@@ -197,7 +190,7 @@ def _getattr_(self, n):
 
 MetaData.__getattr__ = _getattr_
 
-# %% ../00_core.ipynb 46
+# %% ../00_core.ipynb 45
 @patch
 def tuples(self:CursorResult, nm='Row'):
     "Get all results as named tuples"
@@ -218,13 +211,13 @@ def sql(self:MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
     return self.conn.sql(statement, *args, **kwargs)
 
-# %% ../00_core.ipynb 49
+# %% ../00_core.ipynb 48
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
-# %% ../00_core.ipynb 53
+# %% ../00_core.ipynb 52
 @patch
 def close(self:MetaData):
     "Close the connection"
