@@ -3,7 +3,7 @@ project:
 
 website:
   title: "fastsql"
-  site-url: "https://fastai.github.io/fastsql"
+  site-url: "https://answerdotai.github.io/fastsql"
   description: "A MiniDataAPI spec implementation for SQLAlchemy V2"
   repo-branch: main
-  repo-url: "https://github.com/fastai/fastsql"
+  repo-url: "https://github.com/answerdotai/fastsql"

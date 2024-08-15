@@ -85,7 +85,9 @@ def exists(self:DBTable):
     return sa.inspect(self.db.engine).has_table(self.table.name)
 
 # %% ../00_core.ipynb 17
-def _wanted(obj): return {k:v for k,v in asdict(obj).items() if v not in (None,MISSING)}
+def _wanted(obj):
+    if is_dataclass(obj): obj = asdict(obj)
+    return {k:v for k,v in obj.items() if v is not MISSING}
 
 # %% ../00_core.ipynb 18
 @patch
@@ -108,7 +110,7 @@ def __call__(
     offset:int|None=None, # SQL offset
     select:str = "*", # Comma-separated list of columns to select
     **kw  # Combined with `where_args`
-)->list:
+)->list:  # List of returned objects
     "Result of `select` query on the table"
     if select == "*": query = sa.select(self.table)
     else:
@@ -153,8 +155,8 @@ def __getitem__(self:DBTable, key):
 
 # %% ../00_core.ipynb 33
 @patch
-def update(self:DBTable, obj):
-    d = _wanted(obj)
+def update(self:DBTable, obj=None, **kw):
+    d = {**_wanted(obj or {}), **kw}
     pks = tuple(d[k.name] for k in self.table.primary_key)
     qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
     result = self.conn.execute(qry)
