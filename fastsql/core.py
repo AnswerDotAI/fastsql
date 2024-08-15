@@ -85,9 +85,10 @@ def exists(self:DBTable):
     return sa.inspect(self.db.engine).has_table(self.table.name)
 
 # %% ../00_core.ipynb 17
-def _wanted(obj):
+def _wanted(obj, allow_none=False):
     if is_dataclass(obj): obj = asdict(obj)
-    return {k:v for k,v in obj.items() if v is not MISSING}
+    exc = (MISSING,) if allow_none else (MISSING,None)
+    return {k:v for k,v in obj.items() if v not in exc}
 
 # %% ../00_core.ipynb 18
 @patch
@@ -135,7 +136,7 @@ def __call__(
 @patch
 def _pk_where(self:DBTable, meth,key):
     if not isinstance(key,tuple): key = (key,)
-    xtra = getattr(self, 'xtra_id', {})
+    xtra = self.xtra_id
     pkv = zip(self.pks, key + tuple(xtra.values()))
     cond = sa.and_(*[col==val for col,val in pkv])
 #     print(cond.compile(compile_kwargs={"literal_binds": True}))
@@ -155,8 +156,9 @@ def __getitem__(self:DBTable, key):
 
 # %% ../00_core.ipynb 33
 @patch
-def update(self:DBTable, obj=None, **kw):
-    d = {**_wanted(obj or {}), **kw}
+def update(self:DBTable, obj=None, allow_none=False, **kw):
+    d = {**_wanted(obj or {}, allow_none=allow_none), **kw} #, **self.xtra_id}
+#     print(d)
     pks = tuple(d[k.name] for k in self.table.primary_key)
     qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
     result = self.conn.execute(qry)
@@ -195,7 +197,7 @@ def _getattr_(self, n):
 
 MetaData.__getattr__ = _getattr_
 
-# %% ../00_core.ipynb 45
+# %% ../00_core.ipynb 46
 @patch
 def tuples(self:CursorResult, nm='Row'):
     "Get all results as named tuples"
@@ -208,20 +210,21 @@ def sql(self:Connection, statement, nm='Row', *args, **kwargs):
     "Execute `statement` string and return results (if any)"
     if isinstance(statement,str): statement=text(statement)
     t = self.execute(statement)
-    return t.tuples()
+    try: return t.tuples()
+    except ResourceClosedError: pass # statement didn't return anything
 
 @patch
 def sql(self:MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
     return self.conn.sql(statement, *args, **kwargs)
 
-# %% ../00_core.ipynb 47
+# %% ../00_core.ipynb 49
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
-# %% ../00_core.ipynb 51
+# %% ../00_core.ipynb 53
 @patch
 def close(self:MetaData):
     "Close the connection"
