@@ -168,6 +168,19 @@ def delete(self:DBTable, key):
     return result.rowcount
 
 # %% ../00_core.ipynb 38
+@patch
+def __contains__(self:DBTable,
+                 pk_values: Union[list, tuple, str, int] # A single value, or a tuple of values for tables that have a compound primary key
+    ) -> bool:
+    "Is the item with the specified primary key value in this table?"
+    if isinstance(pk_values, (str, int)): pk_values = (pk_values,)
+    try:
+        self[pk_values]
+        return True
+    except NotFoundError:
+        return False
+
+# %% ../00_core.ipynb 43
 from fastcore.net import urlsave
 
 from collections import namedtuple
@@ -176,7 +189,7 @@ from sqlalchemy.sql.base import ReadOnlyColumnCollection
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.cursor import CursorResult
 
-# %% ../00_core.ipynb 39
+# %% ../00_core.ipynb 44
 @patch
 def __dir__(self:MetaData): return self._orig___dir__() + list(self.tables)
 
@@ -190,7 +203,7 @@ def _getattr_(self, n):
 
 MetaData.__getattr__ = _getattr_
 
-# %% ../00_core.ipynb 45
+# %% ../00_core.ipynb 50
 @patch
 def tuples(self:CursorResult, nm='Row'):
     "Get all results as named tuples"
@@ -211,13 +224,13 @@ def sql(self:MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
     return self.conn.sql(statement, *args, **kwargs)
 
-# %% ../00_core.ipynb 48
+# %% ../00_core.ipynb 53
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
-# %% ../00_core.ipynb 52
+# %% ../00_core.ipynb 57
 @patch
 def close(self:MetaData):
     "Close the connection"
