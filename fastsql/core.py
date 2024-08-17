@@ -90,8 +90,8 @@ def insert(self:DBTable, obj):
     "Insert an object into this table, and return it"
     d = {**asdict(obj), **self.xtra_id}
     result = self.conn.execute(sa.insert(self.table).values(**d).returning(*self.table.columns))
-    row = result.one()  # Consume the result set
     self.conn.commit()
+    row = result.one()  # Consume the result set
     return self.cls(**row._asdict())
 
 # %% ../00_core.ipynb 20
@@ -124,6 +124,7 @@ def __call__(
     if limit is not None: query = query.limit(limit)
     if offset is not None: query = query.offset(offset)
     rows = self.conn.execute(query).all()
+    self.conn.commit()
     return [self.cls(**row._asdict()) for row in rows]
 
 # %% ../00_core.ipynb 27
@@ -145,6 +146,7 @@ def __getitem__(self:DBTable, key):
     "Get item with PK `key`"
     qry = self._pk_where('select', key)
     result = self.conn.execute(qry).first()
+    self.conn.commit()
     if not result: raise NotFoundError()
     return self.cls(**result._asdict())
 
@@ -155,8 +157,8 @@ def update(self:DBTable, obj=None, **kw):
     pks = tuple(d[k.name] for k in self.table.primary_key)
     qry = self._pk_where('update', pks).values(**d).returning(*self.table.columns)
     result = self.conn.execute(qry)
-    row = result.one()
     self.conn.commit()
+    row = result.one()
     return self.cls(**row._asdict())
 
 # %% ../00_core.ipynb 35
@@ -215,7 +217,9 @@ def sql(self:MetaData, statement, *args, **kwargs):
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
-    return self.metadata.conn.sql(self.select().where(where).limit(limit))
+    result = self.metadata.conn.sql(self.select().where(where).limit(limit))
+    self.metadata.conn.commit()
+    return result
 
 # %% ../00_core.ipynb 52
 @patch
