@@ -94,7 +94,7 @@ def insert(self:DBTable, obj):
     self.conn.commit()
     return self.cls(**row._asdict())
 
-# %% ../00_core.ipynb 20
+# %% ../00_core.ipynb 21
 @patch
 def __call__(
     self:DBTable,
@@ -126,7 +126,7 @@ def __call__(
     rows = self.conn.execute(query).all()
     return [self.cls(**row._asdict()) for row in rows]
 
-# %% ../00_core.ipynb 27
+# %% ../00_core.ipynb 28
 @patch
 def _pk_where(self:DBTable, meth,key):
     if not isinstance(key,tuple): key = (key,)
@@ -136,10 +136,10 @@ def _pk_where(self:DBTable, meth,key):
 #     print(cond.compile(compile_kwargs={"literal_binds": True}))
     return getattr(self.table,meth)().where(cond)
 
-# %% ../00_core.ipynb 28
+# %% ../00_core.ipynb 29
 class NotFoundError(Exception): pass
 
-# %% ../00_core.ipynb 29
+# %% ../00_core.ipynb 30
 @patch
 def __getitem__(self:DBTable, key):
     "Get item with PK `key`"
@@ -148,7 +148,7 @@ def __getitem__(self:DBTable, key):
     if not result: raise NotFoundError()
     return self.cls(**result._asdict())
 
-# %% ../00_core.ipynb 32
+# %% ../00_core.ipynb 33
 @patch
 def update(self:DBTable, obj=None, **kw):
     d = {**asdict(obj or {}), **kw, **self.xtra_id}
@@ -159,7 +159,7 @@ def update(self:DBTable, obj=None, **kw):
     self.conn.commit()
     return self.cls(**row._asdict())
 
-# %% ../00_core.ipynb 35
+# %% ../00_core.ipynb 36
 @patch
 def delete(self:DBTable, key):
     "Delete item with PK `key` and return count deleted"
@@ -168,6 +168,19 @@ def delete(self:DBTable, key):
     return result.rowcount
 
 # %% ../00_core.ipynb 38
+@patch
+def __contains__(self:DBTable,
+                 pk_values: Union[list, tuple, str, int] # A single value, or a tuple of values for tables that have a compound primary key
+    ) -> bool:
+    "Is the item with the specified primary key value in this table?"
+    if isinstance(pk_values, (str, int)): pk_values = (pk_values,)
+    try:
+        self[pk_values]
+        return True
+    except NotFoundError:
+        return False
+
+# %% ../00_core.ipynb 45
 from fastcore.net import urlsave
 
 from collections import namedtuple
@@ -176,7 +189,7 @@ from sqlalchemy.sql.base import ReadOnlyColumnCollection
 from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.cursor import CursorResult
 
-# %% ../00_core.ipynb 39
+# %% ../00_core.ipynb 46
 @patch
 def __dir__(self:MetaData): return self._orig___dir__() + list(self.tables)
 
@@ -190,7 +203,7 @@ def _getattr_(self, n):
 
 MetaData.__getattr__ = _getattr_
 
-# %% ../00_core.ipynb 45
+# %% ../00_core.ipynb 52
 @patch
 def tuples(self:CursorResult, nm='Row'):
     "Get all results as named tuples"
@@ -211,13 +224,13 @@ def sql(self:MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
     return self.conn.sql(statement, *args, **kwargs)
 
-# %% ../00_core.ipynb 48
+# %% ../00_core.ipynb 55
 @patch
 def get(self:Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
-# %% ../00_core.ipynb 52
+# %% ../00_core.ipynb 59
 @patch
 def close(self:MetaData):
     "Close the connection"
