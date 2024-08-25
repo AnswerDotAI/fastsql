@@ -6,6 +6,8 @@ format:
     theme: cosmo
     css: styles.css
     toc: true
+    keep-md: true
+  commonmark: default
 
 website:
   twitter-card: true
@@ -16,7 +18,5 @@ website:
     search: true
   sidebar:
     style: floating
-    keep-md: true
-  commonmark: default
 
 metadata-files: [nbdev.yml, sidebar.yml]
