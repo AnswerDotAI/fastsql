@@ -16,5 +16,7 @@ website:
     search: true
   sidebar:
     style: floating
+    keep-md: true
+  commonmark: default
 
 metadata-files: [nbdev.yml, sidebar.yml]
