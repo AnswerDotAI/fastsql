@@ -9,11 +9,11 @@
 pip install fastsql
 ```
 
-## How to use
+## Creating a table
 
 ``` python
 from fastsql import *
-from dataclasses import dataclass
+import sqlalchemy as sa
 ```
 
 First we instantiate our database using FastSQL’s Database class:
@@ -22,23 +22,16 @@ First we instantiate our database using FastSQL’s Database class:
 db = Database("sqlite:///:memory:")
 ```
 
-We demonstrate fastsql’s features here using dataclasses-as-schema
-inspired by FastHTML’s [adv_app
-example](https://github.com/AnswerDotAI/fasthtml/blob/main/examples/adv_app.py).
+The main table object in FastSQL is
+[`DBTable`](https://answerdotai.github.io/fastsql/core.html#dbtable),
+which you can create by calling `DBTable(table)` with a SQLAlchemy
+`Table` object, or by calling `Database.create(cls)` with a class
+(optionally a dataclass). We’ll demonstrate the latter with these
+classes:
 
 ``` python
-@dataclass
-class User:
-    name:str
-    pwd:str
-
-@dataclass
-class Todo:
-    title:str
-    name:str
-    done:bool=False
-    details:str=''
-    id:int=None
+class User: name:str; pwd:str
+class Todo: title:str; name:str; id:int=None; done:bool=False; details:str=''
 ```
 
 Equipped with our schemas, let’s turn them into database tables.
@@ -48,23 +41,23 @@ users = db.create(User, pk='name')
 todos = db.create(Todo, pk='id')
 ```
 
-Let’s confirm the table design.
+Let’s confirm the table design:
 
 ``` python
-db.print_schema()
+print(db.schema())
 ```
 
-    Table: Todo
-      - *id: INTEGER
+    Table: todo
       - title: VARCHAR
       - name: VARCHAR
+      * id: INTEGER
       - done: BOOLEAN
       - details: VARCHAR
-    Table: User
-      - *name: VARCHAR
+    Table: user
+      * name: VARCHAR
       - pwd: VARCHAR
 
-Does a table exist?
+We can check if a table exists:
 
 ``` python
 users.exists()
@@ -72,9 +65,7 @@ users.exists()
 
     True
 
-## Manipulating data
-
-> Creating, reading, updating, and deleting records in database tables.
+## Using FastSQL
 
 Let’s create some dataclass objects representing users and todos.
 
@@ -97,39 +88,63 @@ todos.insert(t1)
 todos.insert(t2)
 ```
 
-    Todo(title='write book', name='rlt', done=False, details='', id=3)
+    Todo(title='write book', name='rlt', id=3, done=False, details='')
 
-Display all the user records.
+To query a single table, call the table like a function (which is
+implemented in Python using the special `__call__` method.
+
+------------------------------------------------------------------------
+
+<a
+href="https://github.com/answerdotai/fastsql/blob/main/fastsql/core.py#LNone"
+target="_blank" style="float:right; font-size:smaller">source</a>
+
+### DBTable.\_\_call\_\_
+
+>      DBTable.__call__ (where:str|None=None,
+>                        where_args:Union[Iterable,dict,NoneType]=None,
+>                        order_by:str|None=None, limit:int|None=None,
+>                        offset:int|None=None, select:str='*', **kw)
+
+*Result of `select` query on the table*
+
+|             | **Type**    | **Default** | **Details**                                                               |
+|-------------|-------------|-------------|---------------------------------------------------------------------------|
+| where       | str \| None | None        | SQL where fragment to use, for example `id > ?`                           |
+| where_args  | Union       | None        | Parameters to use with `where`; iterable for `id>?`, or dict for `id>:id` |
+| order_by    | str \| None | None        | Column or fragment of SQL to order by                                     |
+| limit       | int \| None | None        | Number of rows to limit to                                                |
+| offset      | int \| None | None        | SQL offset                                                                |
+| select      | str         | \*          | Comma-separated list of columns to select                                 |
+| kw          |             |             |                                                                           |
+| **Returns** | **list**    |             | **List of returned objects**                                              |
 
 ``` python
-for user in users():
-    print(user)
+users()
 ```
 
-    User(name='jph', pwd='foo')
-    User(name='rlt', pwd='bar')
+    [User(name='jph', pwd='foo'), User(name='rlt', pwd='bar')]
 
 Use where statement to filter records, in this case only jph’s todos.
 
 ``` python
-for todo in todos(where="name = :name", name="jph"):
-    print(todo)
+todos(where="name = :name", name="jph")
 ```
 
-    Todo(title='do it', name='jph', done=False, details='', id=1)
-    Todo(title='build it', name='jph', done=False, details='', id=2)
+    [Todo(title='do it', name='jph', id=1, done=False, details=''),
+     Todo(title='build it', name='jph', id=2, done=False, details='')]
 
 Look only for those records with the word `it` in it.
 
 ``` python
-for todo in todos(where="title LIKE :title", title="%% it%%"):
-    print(todo)
+todos(where="title LIKE :title", title="%% it%%")
 ```
 
-    Todo(title='do it', name='jph', done=False, details='', id=1)
-    Todo(title='build it', name='jph', done=False, details='', id=2)
+    [Todo(title='do it', name='jph', id=1, done=False, details=''),
+     Todo(title='build it', name='jph', id=2, done=False, details='')]
 
-Fetch a record just by the primary key.
+You can also fetch a record just by the primary key by using `[]` with
+the table:
 
 ``` python
 user = users['rlt']
@@ -138,7 +153,8 @@ user
 
     User(name='rlt', pwd='bar')
 
-Change a value in a record.
+Change a value in a record by updating an object, and passing the
+updated object to `update()`:
 
 ``` python
 user.pwd = 'baz'
@@ -147,3 +163,24 @@ users['rlt']
 ```
 
     User(name='rlt', pwd='baz')
+
+## Using SQLAlchemy
+
+``` python
+ut,uc = users.t
+tt,tc = todos.t
+```
+
+``` python
+query = sa.select(uc.name, uc.pwd, tc.title).select_from(
+    tt.join(ut, tc.name == uc.name))
+list(db.execute(query))
+```
+
+    [('jph', 'foo', 'do it'),
+     ('jph', 'foo', 'build it'),
+     ('rlt', 'baz', 'write book')]
+
+``` python
+dbm = db.meta
+```
