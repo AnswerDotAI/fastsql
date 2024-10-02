@@ -50,7 +50,7 @@ class DBTable:
         self.xtra_id = kwargs
 
 # %% ../00_core.ipynb 9
-_type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean}
+_type_map = {int: sa.Integer, str: sa.String, bool: sa.Boolean, float: sa.Float}
 def _column(name, typ, primary=False): return sa.Column(name, _type_map[typ], primary_key=primary)
 
 # %% ../00_core.ipynb 10
