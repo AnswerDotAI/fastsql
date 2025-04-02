@@ -1,0 +1,117 @@
+[
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "fastsql",
+    "section": "",
+    "text": "pip install fastsql",
+    "crumbs": [
+      "fastsql"
+    ]
+  },
+  {
+    "objectID": "index.html#install",
+    "href": "index.html#install",
+    "title": "fastsql",
+    "section": "",
+    "text": "pip install fastsql",
+    "crumbs": [
+      "fastsql"
+    ]
+  },
+  {
+    "objectID": "index.html#creating-a-table",
+    "href": "index.html#creating-a-table",
+    "title": "fastsql",
+    "section": "Creating a table",
+    "text": "Creating a table\n\nfrom fastsql import *\nimport sqlalchemy as sa\n\nFirst we instantiate our database using FastSQL’s Database class:\n\ndb = Database(\"sqlite:///:memory:\")\n\nThe main table object in FastSQL is DBTable, which you can create by calling DBTable(table) with a SQLAlchemy Table object, or by calling Database.create(cls) with a class (optionally a dataclass). We’ll demonstrate the latter with these classes:\n\nclass User: name:str; pwd:str\nclass Todo: title:str; name:str; id:int=None; done:bool=False; details:str=''\n\nEquipped with our schemas, let’s turn them into database tables.\n\nusers = db.create(User, pk='name')\ntodos = db.create(Todo, pk='id')\n\nLet’s confirm the table design:\n\nprint(db.schema())\n\nTable: todo\n  - title: VARCHAR\n  - name: VARCHAR\n  * id: INTEGER\n  - done: BOOLEAN\n  - details: VARCHAR\nTable: user\n  * name: VARCHAR\n  - pwd: VARCHAR\n\n\n\nWe can check if a table exists:\n\nusers.exists()\n\nTrue",
+    "crumbs": [
+      "fastsql"
+    ]
+  },
+  {
+    "objectID": "index.html#using-fastsql",
+    "href": "index.html#using-fastsql",
+    "title": "fastsql",
+    "section": "Using FastSQL",
+    "text": "Using FastSQL\nLet’s create some dataclass objects representing users and todos.\n\nu0 = User('jph','foo')\nu1 = User('rlt','bar')\nt0 = Todo('do it', 'jph')\nt1 = Todo('build it', 'jph')\nt2 = Todo('write book', 'rlt')\n\nLet’s convert these dataclass objects into database records. To do that we insert them into their tables using the aply named insert method:\n\nusers.insert(u0)\nusers.insert(u1)\ntodos.insert(t0)\ntodos.insert(t1)\ntodos.insert(t2)\n\nTodo(title='write book', name='rlt', id=3, done=False, details='')\n\n\nTo query a single table, call the table like a function (which is implemented in Python using the special __call__ method.\n\nsource\n\nDBTable.__call__\n\n DBTable.__call__ (where:str|None=None,\n                   where_args:Union[Iterable,dict,NoneType]=None,\n                   order_by:str|None=None, limit:int|None=None,\n                   offset:int|None=None, select:str='*', **kw)\n\nResult of select query on the table\n\n\n\n\n\n\n\n\n\n\nType\nDefault\nDetails\n\n\n\n\nwhere\nstr | None\nNone\nSQL where fragment to use, for example id &gt; ?\n\n\nwhere_args\nUnion\nNone\nParameters to use with where; iterable for id&gt;?, or dict for id&gt;:id\n\n\norder_by\nstr | None\nNone\nColumn or fragment of SQL to order by\n\n\nlimit\nint | None\nNone\nNumber of rows to limit to\n\n\noffset\nint | None\nNone\nSQL offset\n\n\nselect\nstr\n*\nComma-separated list of columns to select\n\n\nkw\nVAR_KEYWORD\n\n\n\n\nReturns\nlist\n\nList of returned objects\n\n\n\n\nusers()\n\n[User(name='jph', pwd='foo'), User(name='rlt', pwd='bar')]\n\n\nUse where statement to filter records, in this case only jph’s todos.\n\ntodos(where=\"name = :name\", name=\"jph\")\n\n[Todo(title='do it', name='jph', id=1, done=False, details=''),\n Todo(title='build it', name='jph', id=2, done=False, details='')]\n\n\nLook only for those records with the word it in it.\n\ntodos(where=\"title LIKE :title\", title=\"%% it%%\")\n\n[Todo(title='do it', name='jph', id=1, done=False, details=''),\n Todo(title='build it', name='jph', id=2, done=False, details='')]\n\n\nYou can also fetch a record just by the primary key by using [] with the table:\n\nuser = users['rlt']\nuser\n\nUser(name='rlt', pwd='bar')\n\n\nChange a value in a record by updating an object, and passing the updated object to update():\n\nuser.pwd = 'baz'\nusers.update(user)\nusers['rlt']\n\nUser(name='rlt', pwd='baz')",
+    "crumbs": [
+      "fastsql"
+    ]
+  },
+  {
+    "objectID": "index.html#using-sqlalchemy",
+    "href": "index.html#using-sqlalchemy",
+    "title": "fastsql",
+    "section": "Using SQLAlchemy",
+    "text": "Using SQLAlchemy\n\nut,uc = users.t\ntt,tc = todos.t\n\n\nquery = sa.select(uc.name, uc.pwd, tc.title).select_from(\n    tt.join(ut, tc.name == uc.name))\nlist(db.execute(query))\n\n[('jph', 'foo', 'do it'),\n ('jph', 'foo', 'build it'),\n ('rlt', 'baz', 'write book')]\n\n\n\ndbm = db.meta",
+    "crumbs": [
+      "fastsql"
+    ]
+  },
+  {
+    "objectID": "CHANGELOG.html",
+    "href": "CHANGELOG.html",
+    "title": "Release notes",
+    "section": "",
+    "text": "Use new fastcore UNSET as asdict (#18)\n\n\n\n\n\n\n\n\nSupport dict and kwarg update args (#14)\n\n\n\n\n\n\n\n\nxtra support in insert (#10)\n\n\n\n\n\nsquare brackets not accepted by all dbs (#11)\n\n\n\n\n\n\nInit release of v2, supporting the MiniDataAPI spec"
+  },
+  {
+    "objectID": "CHANGELOG.html#section",
+    "href": "CHANGELOG.html#section",
+    "title": "Release notes",
+    "section": "",
+    "text": "Use new fastcore UNSET as asdict (#18)"
+  },
+  {
+    "objectID": "CHANGELOG.html#section-1",
+    "href": "CHANGELOG.html#section-1",
+    "title": "Release notes",
+    "section": "",
+    "text": "Support dict and kwarg update args (#14)"
+  },
+  {
+    "objectID": "CHANGELOG.html#section-2",
+    "href": "CHANGELOG.html#section-2",
+    "title": "Release notes",
+    "section": "",
+    "text": "xtra support in insert (#10)\n\n\n\n\n\nsquare brackets not accepted by all dbs (#11)"
+  },
+  {
+    "objectID": "CHANGELOG.html#section-3",
+    "href": "CHANGELOG.html#section-3",
+    "title": "Release notes",
+    "section": "",
+    "text": "Init release of v2, supporting the MiniDataAPI spec"
+  },
+  {
+    "objectID": "core.html",
+    "href": "core.html",
+    "title": "Source",
+    "section": "",
+    "text": "We create a Database class and a DBTable class (which is returned by Database.create), using sqlalchemy v2. These classes will allow us to directly work with dataclasses such as these:\n\nclass User: name:str; pwd:str\nclass Todo: title:str; name:str; id:int; done:bool=False; details:str=''\nclass Student: id:int; grad_year:int; name:str\n\n\nsource\n\n\n\n Database (conn_str)\n\nA connection to a SQLAlchemy database\n\ndb = Database(\"sqlite:///:memory:\")\n# db = Database(\"postgresql://\")\n\n\nsource\n\n\n\n\n DBTable (table:sqlalchemy.sql.schema.Table, database:__main__.Database,\n          cls)\n\nA connection to a SQLAlchemy table, created if needed\n\nsource\n\n\n\n\n Database.create (cls:type, pk='id', name:str|None=None)\n\nGet a table object, creating in DB if needed\n\nusers = db.create(User, pk='name')\ntodos = db.create(Todo, pk='id')\nstudents = db.create(Student, pk=('id', 'grad_year'))\n\n\nsource\n\n\n\n\n Database.schema ()\n\nShow all tables and columns\n\nprint(db.schema())\n\nTable: student\n  * id: INTEGER\n  * grad_year: INTEGER\n  - name: VARCHAR\nTable: todo\n  - title: VARCHAR\n  - name: VARCHAR\n  * id: INTEGER\n  - done: BOOLEAN\n  - details: VARCHAR\nTable: user\n  * name: VARCHAR\n  - pwd: VARCHAR\n\n\n\n\nsource\n\n\n\n\n DBTable.exists ()\n\nCheck if this table exists in the DB\n\nusers.exists()\n\nTrue\n\n\n\nu0 = User('jph','foo')\nu1 = User('rlt','bar')\nt0 = Todo('do it', 'jph')\nt1 = Todo('get it done', 'rlt')\n\n\nsource\n\n\n\n\n DBTable.insert (obj)\n\nInsert an object into this table, and return it\n\nt = todos.insert(t0)\nassert t.id\nt\n\nTodo(title='do it', name='jph', id=1, done=False, details='')\n\n\n\nu = users.insert(u0)\nassert u.name=='jph'\nusers.insert(u1)\nu\n\nUser(name='jph', pwd='foo')\n\n\n\ntodos.insert(t1)\n\nTodo(title='get it done', name='rlt', id=2, done=False, details='')\n\n\n\nsource\n\n\n\n\n DBTable.__call__ (where:str|None=None,\n                   where_args:Union[Iterable,dict,NoneType]=None,\n                   order_by:str|None=None, limit:int|None=None,\n                   offset:int|None=None, select:str='*', **kw)\n\nResult of select query on the table\n\n\n\n\n\n\n\n\n\n\nType\nDefault\nDetails\n\n\n\n\nwhere\nstr | None\nNone\nSQL where fragment to use, for example id &gt; ?\n\n\nwhere_args\nUnion\nNone\nParameters to use with where; iterable for id&gt;?, or dict for id&gt;:id\n\n\norder_by\nstr | None\nNone\nColumn or fragment of SQL to order by\n\n\nlimit\nint | None\nNone\nNumber of rows to limit to\n\n\noffset\nint | None\nNone\nSQL offset\n\n\nselect\nstr\n*\nComma-separated list of columns to select\n\n\nkw\nVAR_KEYWORD\n\n\n\n\nReturns\nlist\n\nList of returned objects\n\n\n\n\nassert users()==[u0,u1]\nusers()\n\n[User(name='jph', pwd='foo'), User(name='rlt', pwd='bar')]\n\n\n\nr = users(where=\"pwd LIKE :pwd\", pwd=\"b%\")\nassert r==[u1]\nr\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers.xtra(name='rlt')\nusers(order_by='name')\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers(where='name=\"rlt\"')\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers(where='name=\"jph\"')\n\n[]\n\n\n\nassert len(todos())==2\ntodos()\n\n[Todo(title='do it', name='jph', id=1, done=False, details=''),\n Todo(title='get it done', name='rlt', id=2, done=False, details='')]\n\n\n\nsource\n\n\n\nCommon base class for all non-exit exceptions.\n\nsource\n\n\n\n\n DBTable.__getitem__ (key)\n\nGet item with PK key\n\nusers.xtra(name='jph')\n\nassert users['jph']==u0\nusers['jph']\n\nUser(name='jph', pwd='foo')\n\n\n\nusers.xtra(name='rlt')\ntest_fail(lambda: users['jph']==u0)\n\n\nsource\n\n\n\n\n DBTable.update (obj=None, **kw)\n\n\nusers.xtra(name='jph')\nu.pwd = 'new'\nusers.update(u)\nusers.xtra()\nusers()\n\n[User(name='jph', pwd='new'), User(name='rlt', pwd='bar')]\n\n\n\nusers.xtra(name='rlt')\nu.pwd = 'foo'\nusers.update(u)\nusers.xtra()\ntest_eq(users['jph'].pwd, 'new')\n\n\nsource\n\n\n\n\n DBTable.delete (key)\n\nDelete item with PK key and return count deleted\n\nassert users.delete('jph')\ntest_fail(lambda: users['jph'])\n\n\nsource\n\n\n\n\n DBTable.__contains__ (pk_values:Union[list,tuple,str,int])\n\nIs the item with the specified primary key value in this table?\n\n\n\n\n\n\n\n\n\nType\nDetails\n\n\n\n\npk_values\nUnion\nA single value, or a tuple of values for tables that have a compound primary key\n\n\nReturns\nbool\n\n\n\n\nDemonstration with single field primary key:\n\nassert not 'jph' in users\nassert 'rlt' in users\n\nFor compound primary keys, lets whether a student is in the students table or not.\n\nstudents.insert(Student(1, 2021, 'jph'))\n\nStudent(id=1, grad_year=2021, name='jph')\n\n\n\nassert (1,2021) in students\nassert (1,2030) not in students",
+    "crumbs": [
+      "Source"
+    ]
+  },
+  {
+    "objectID": "core.html#database-and-dbtable",
+    "href": "core.html#database-and-dbtable",
+    "title": "Source",
+    "section": "",
+    "text": "We create a Database class and a DBTable class (which is returned by Database.create), using sqlalchemy v2. These classes will allow us to directly work with dataclasses such as these:\n\nclass User: name:str; pwd:str\nclass Todo: title:str; name:str; id:int; done:bool=False; details:str=''\nclass Student: id:int; grad_year:int; name:str\n\n\nsource\n\n\n\n Database (conn_str)\n\nA connection to a SQLAlchemy database\n\ndb = Database(\"sqlite:///:memory:\")\n# db = Database(\"postgresql://\")\n\n\nsource\n\n\n\n\n DBTable (table:sqlalchemy.sql.schema.Table, database:__main__.Database,\n          cls)\n\nA connection to a SQLAlchemy table, created if needed\n\nsource\n\n\n\n\n Database.create (cls:type, pk='id', name:str|None=None)\n\nGet a table object, creating in DB if needed\n\nusers = db.create(User, pk='name')\ntodos = db.create(Todo, pk='id')\nstudents = db.create(Student, pk=('id', 'grad_year'))\n\n\nsource\n\n\n\n\n Database.schema ()\n\nShow all tables and columns\n\nprint(db.schema())\n\nTable: student\n  * id: INTEGER\n  * grad_year: INTEGER\n  - name: VARCHAR\nTable: todo\n  - title: VARCHAR\n  - name: VARCHAR\n  * id: INTEGER\n  - done: BOOLEAN\n  - details: VARCHAR\nTable: user\n  * name: VARCHAR\n  - pwd: VARCHAR\n\n\n\n\nsource\n\n\n\n\n DBTable.exists ()\n\nCheck if this table exists in the DB\n\nusers.exists()\n\nTrue\n\n\n\nu0 = User('jph','foo')\nu1 = User('rlt','bar')\nt0 = Todo('do it', 'jph')\nt1 = Todo('get it done', 'rlt')\n\n\nsource\n\n\n\n\n DBTable.insert (obj)\n\nInsert an object into this table, and return it\n\nt = todos.insert(t0)\nassert t.id\nt\n\nTodo(title='do it', name='jph', id=1, done=False, details='')\n\n\n\nu = users.insert(u0)\nassert u.name=='jph'\nusers.insert(u1)\nu\n\nUser(name='jph', pwd='foo')\n\n\n\ntodos.insert(t1)\n\nTodo(title='get it done', name='rlt', id=2, done=False, details='')\n\n\n\nsource\n\n\n\n\n DBTable.__call__ (where:str|None=None,\n                   where_args:Union[Iterable,dict,NoneType]=None,\n                   order_by:str|None=None, limit:int|None=None,\n                   offset:int|None=None, select:str='*', **kw)\n\nResult of select query on the table\n\n\n\n\n\n\n\n\n\n\nType\nDefault\nDetails\n\n\n\n\nwhere\nstr | None\nNone\nSQL where fragment to use, for example id &gt; ?\n\n\nwhere_args\nUnion\nNone\nParameters to use with where; iterable for id&gt;?, or dict for id&gt;:id\n\n\norder_by\nstr | None\nNone\nColumn or fragment of SQL to order by\n\n\nlimit\nint | None\nNone\nNumber of rows to limit to\n\n\noffset\nint | None\nNone\nSQL offset\n\n\nselect\nstr\n*\nComma-separated list of columns to select\n\n\nkw\nVAR_KEYWORD\n\n\n\n\nReturns\nlist\n\nList of returned objects\n\n\n\n\nassert users()==[u0,u1]\nusers()\n\n[User(name='jph', pwd='foo'), User(name='rlt', pwd='bar')]\n\n\n\nr = users(where=\"pwd LIKE :pwd\", pwd=\"b%\")\nassert r==[u1]\nr\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers.xtra(name='rlt')\nusers(order_by='name')\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers(where='name=\"rlt\"')\n\n[User(name='rlt', pwd='bar')]\n\n\n\nusers(where='name=\"jph\"')\n\n[]\n\n\n\nassert len(todos())==2\ntodos()\n\n[Todo(title='do it', name='jph', id=1, done=False, details=''),\n Todo(title='get it done', name='rlt', id=2, done=False, details='')]\n\n\n\nsource\n\n\n\nCommon base class for all non-exit exceptions.\n\nsource\n\n\n\n\n DBTable.__getitem__ (key)\n\nGet item with PK key\n\nusers.xtra(name='jph')\n\nassert users['jph']==u0\nusers['jph']\n\nUser(name='jph', pwd='foo')\n\n\n\nusers.xtra(name='rlt')\ntest_fail(lambda: users['jph']==u0)\n\n\nsource\n\n\n\n\n DBTable.update (obj=None, **kw)\n\n\nusers.xtra(name='jph')\nu.pwd = 'new'\nusers.update(u)\nusers.xtra()\nusers()\n\n[User(name='jph', pwd='new'), User(name='rlt', pwd='bar')]\n\n\n\nusers.xtra(name='rlt')\nu.pwd = 'foo'\nusers.update(u)\nusers.xtra()\ntest_eq(users['jph'].pwd, 'new')\n\n\nsource\n\n\n\n\n DBTable.delete (key)\n\nDelete item with PK key and return count deleted\n\nassert users.delete('jph')\ntest_fail(lambda: users['jph'])\n\n\nsource\n\n\n\n\n DBTable.__contains__ (pk_values:Union[list,tuple,str,int])\n\nIs the item with the specified primary key value in this table?\n\n\n\n\n\n\n\n\n\nType\nDetails\n\n\n\n\npk_values\nUnion\nA single value, or a tuple of values for tables that have a compound primary key\n\n\nReturns\nbool\n\n\n\n\nDemonstration with single field primary key:\n\nassert not 'jph' in users\nassert 'rlt' in users\n\nFor compound primary keys, lets whether a student is in the students table or not.\n\nstudents.insert(Student(1, 2021, 'jph'))\n\nStudent(id=1, grad_year=2021, name='jph')\n\n\n\nassert (1,2021) in students\nassert (1,2030) not in students",
+    "crumbs": [
+      "Source"
+    ]
+  },
+  {
+    "objectID": "core.html#sqlalchemy-helpers",
+    "href": "core.html#sqlalchemy-helpers",
+    "title": "Source",
+    "section": "SQLAlchemy helpers",
+    "text": "SQLAlchemy helpers\n\nsource\n\nReadOnlyColumnCollection.__dir__\n\n ReadOnlyColumnCollection.__dir__ ()\n\nDefault dir() implementation.\n\nsource\n\n\nMetaData.__dir__\n\n MetaData.__dir__ ()\n\nDefault dir() implementation.\n\ndbm = db.meta\n\n\n' '.join(dbm.tables)\n\n'user todo student'\n\n\n\nt = dbm.todo\n\n\nlist(t.c)\n\n[Column('title', String(), table=&lt;todo&gt;),\n Column('name', String(), table=&lt;todo&gt;),\n Column('id', Integer(), table=&lt;todo&gt;, primary_key=True, nullable=False),\n Column('done', Boolean(), table=&lt;todo&gt;),\n Column('details', String(), table=&lt;todo&gt;)]\n\n\n\nfrom sqlalchemy.exc import ResourceClosedError\n\n\nsource\n\n\nMetaData.sql\n\n MetaData.sql (statement, *args, **kwargs)\n\nExecute statement string and return DataFrame of results (if any)\n\nsource\n\n\nConnection.sql\n\n Connection.sql (statement, nm='Row', *args, **kwargs)\n\nExecute statement string and return results (if any)\n\nsource\n\n\nCursorResult.tuples\n\n CursorResult.tuples (nm='Row')\n\nGet all results as named tuples\n\n# dbm.sql('delete from todo')\n# db.conn.commit()\n\n\nrs = dbm.sql('select * from user')\nrs[0]\n\nRow(name='rlt', pwd='foo')\n\n\n\nsource\n\n\nTable.get\n\n Table.get (where=None, limit=None)\n\nSelect from table, optionally limited by where and limit clauses\n\nt.get(t.c.title.startswith('d'), limit=5)\n\n[Row(title='do it', name='jph', id=1, done=False, details='')]\n\n\nThis is the query that will run behind the scenes:\n\nprint(t.select().where(t.c.title.startswith('d')).limit(5))\n\nSELECT todo.title, todo.name, todo.id, todo.done, todo.details \nFROM todo \nWHERE (todo.title LIKE :title_1 || '%')\n LIMIT :param_1\n\n\n\nsource\n\n\nMetaData.close\n\n MetaData.close ()\n\nClose the connection\n\ndbm.close()",
+    "crumbs": [
+      "Source"
+    ]
+  }
+]
