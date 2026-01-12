@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['DEFAULT', 'Default', 'Database', 'DBTable', 'database', 'all_dcs', 'create_mod', 'get_typ', 'NotFoundError',
-           'MissingPrimaryKey']
+           'MissingPrimaryKey', 'Meta']
 
 # %% ../00_core.ipynb 2
 from dataclasses import dataclass, is_dataclass, MISSING, fields, field, make_dataclass
@@ -363,6 +363,7 @@ def create(
     ignore=True,
     transform=False,
     strict=False,
+    constraints=None,
 ):
     "Get a table object, creating in DB if needed"
     pk = listify(pk)
@@ -380,7 +381,8 @@ def create(
         )
         for o in fields(cls)
     ]
-    tbl = sa.Table(name, self.meta, *cols, extend_existing=True)
+    constraints = [sa.CheckConstraint(c) for c in (constraints or [])]
+    tbl = sa.Table(name, self.meta, *cols, *constraints, extend_existing=True)
     res = DBTable(tbl, self, cls)
     tbl.cls = cls
     self._tables[name] = res
@@ -999,7 +1001,56 @@ def drop(self: DBTable, ignore: bool = False):
     except Exception as e:
         if not ignore: raise
 
-# %% ../00_core.ipynb 113
+# %% ../00_core.ipynb 114
+class Meta: id: int; version: int = 0
+
+# %% ../00_core.ipynb 115
+@patch
+def _add_meta(self: Database):
+    "Create _meta table if it doesn't exist"
+    meta = self.create(Meta, name='_meta', pk='id', constraints=['id = 1'])
+    meta.upsert({'id': 1, 'version': 0})
+
+# %% ../00_core.ipynb 119
+def _get_version(self):
+    try: return self['_meta'].selectone('id=1').version
+    except: return 0
+
+def _set_version(self, v): self['_meta'].update_where({'version': v}, 'id = 1')
+
+Database.version = property(_get_version, _set_version)
+
+# %% ../00_core.ipynb 122
+def _get_migrations(mdir):
+    scripts = {}
+    for p in Path(mdir).iterdir():
+        if m := re.match(r'^(\d+)-', p.name): scripts[int(m.group(1))] = p
+    return sorted(scripts.items())
+
+# %% ../00_core.ipynb 124
+@patch
+def migrate(self:Database, mdir):
+    if '_meta' not in self.t: self._add_meta()
+    cver = self.version
+    for v, p in _get_migrations(mdir)[self.version:]:
+        try:
+            if p.suffix == '.sql': self.execute(sa.text(p.read_text()))
+            elif p.suffix == '.py':
+                subprocess.run([sys.executable, p, self.conn_str], check=True)
+            self.version = v
+            self.conn.commit()
+            print(f"Applied migration {v}: {p.name}")
+        except Exception as e:
+            self.conn.rollback()
+            raise e
+    self.conn.commit()
+    cls_map = {nm: tbl.cls for nm, tbl in self._tables.items() if tbl.cls}
+    self._tables.clear()
+    self.meta.clear()
+    self.meta.reflect(bind=self.engine)
+    for tbl in self.t: tbl.dataclass()
+
+# %% ../00_core.ipynb 129
 from fastcore.net import urlsave
 
 from collections import namedtuple
@@ -1009,7 +1060,7 @@ from sqlalchemy.engine.base import Connection
 from sqlalchemy.engine.cursor import CursorResult
 
 
-# %% ../00_core.ipynb 114
+# %% ../00_core.ipynb 130
 @patch
 def __dir__(self: MetaData):
     return self._orig___dir__() + list(self.tables)
@@ -1029,7 +1080,7 @@ def _getattr_(self, n):
 MetaData.__getattr__ = _getattr_
 
 
-# %% ../00_core.ipynb 120
+# %% ../00_core.ipynb 136
 @patch
 def tuples(self: CursorResult, nm="Row"):
     "Get all results as named tuples"
@@ -1055,14 +1106,14 @@ def sql(self: MetaData, statement, *args, **kwargs):
     return self.conn.sql(statement, *args, **kwargs)
 
 
-# %% ../00_core.ipynb 123
+# %% ../00_core.ipynb 139
 @patch
 def get(self: Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
     return self.metadata.conn.sql(self.select().where(where).limit(limit))
 
 
-# %% ../00_core.ipynb 127
+# %% ../00_core.ipynb 143
 @patch
 def close(self: MetaData):
     "Close the connection"
