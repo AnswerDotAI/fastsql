@@ -10,13 +10,13 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union, Iterable, Generator, List, Tuple, Dict, get_args
 
-import sqlalchemy as sa
 from sqlalchemy.orm import Session
 from fastcore.utils import *
 from fastcore.test import test_fail, test_eq
 from fastcore.xtras import dataclass_src
 from itertools import starmap
 
+import sqlalchemy as sa, subprocess
 
 # %% ../00_core.ipynb 3
 class Default:
