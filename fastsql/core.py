@@ -1013,7 +1013,9 @@ def _add_meta(self: Database):
 
 # %% ../00_core.ipynb 119
 def _get_version(self):
-    try: return self['_meta'].selectone('id=1').version
+    try:
+        res = self['_meta'].selectone('id=1')
+        return res['version'] if isinstance(res, dict) else res.version
     except: return 0
 
 def _set_version(self, v): self['_meta'].update_where({'version': v}, 'id = 1')
