@@ -16,7 +16,7 @@ from fastcore.test import test_fail, test_eq
 from fastcore.xtras import dataclass_src
 from itertools import starmap
 
-import sqlalchemy as sa, subprocess
+import sqlparse, sqlalchemy as sa, subprocess
 
 # %% ../00_core.ipynb 3
 class Default:
@@ -1036,7 +1036,8 @@ def migrate(self:Database, mdir):
     cver = self.version
     for v, p in _get_migrations(mdir)[self.version:]:
         try:
-            if p.suffix == '.sql': self.execute(sa.text(p.read_text()))
+            if p.suffix == '.sql':
+                for stmt in filter(str.strip, sqlparse.split(p.read_text())): self.execute(sa.text(stmt))
             elif p.suffix == '.py':
                 subprocess.run([sys.executable, p, self.conn_str], check=True)
             self.version = v
