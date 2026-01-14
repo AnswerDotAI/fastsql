@@ -1,0 +1,1 @@
+alter table cat add column color text default "unknown";
