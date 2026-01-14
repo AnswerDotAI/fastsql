@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 2.1.1
+
+### New Features
+
+- add support for migrations with multiple statements ([#26](https://github.com/AnswerDotAI/fastsql/pull/26)), thanks to [@comhar](https://github.com/comhar)
+
+
 ## 2.1.0
 
 ### Breaking Changes
