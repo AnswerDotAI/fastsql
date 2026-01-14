@@ -2,6 +2,18 @@
 
 <!-- do not remove -->
 
+## 2.1.0
+
+### Breaking Changes
+
+- Align fastsql core with fastlite-style APIs ([#23](https://github.com/AnswerDotAI/fastsql/pull/23)), thanks to [@ncoop57](https://github.com/ncoop57)
+
+### New Features
+
+- Add fastmigrate system ([#24](https://github.com/AnswerDotAI/fastsql/pull/24)), thanks to [@ncoop57](https://github.com/ncoop57)
+- add markdown to doc output ([#20](https://github.com/AnswerDotAI/fastsql/issues/20))
+
+
 ## 2.0.3
 
 ### New Features
