@@ -39,9 +39,9 @@ def _db_str(path):
 class Database:
     "A connection to a SQLAlchemy database"
 
-    def __init__(self, conn_str):
+    def __init__(self, conn_str, engine_kws=None):
         self.conn_str = conn_str
-        self.engine = sa.create_engine(conn_str)
+        self.engine = sa.create_engine(conn_str, **(engine_kws or {}))
         self.meta = sa.MetaData()
         self.meta.reflect(bind=self.engine)
         self.meta.bind = self.engine
