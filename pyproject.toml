@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
 ]
-dependencies = []
+dependencies = ["fastcore>=1.7.1","sqlalchemy","sqlparse"]
 
 [project.urls]
 Repository = "https://github.com/answerdotai/fastsql"
