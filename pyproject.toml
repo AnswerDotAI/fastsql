@@ -1,11 +1,36 @@
 [build-system]
-requires = ["setuptools>=64.0"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name="fastsql"
+dynamic = ["version"]
+description = "A MiniDataAPI spec implementation for SQLAlchemy V2"
+readme = "README.md"
 requires-python=">=3.10"
-dynamic = [ "keywords", "description", "version", "dependencies", "optional-dependencies", "readme", "license", "authors", "classifiers", "entry-points", "scripts", "urls"]
+license = {text = "Apache-2.0"}
+authors = [{name = "Jeremy Howard, Daniel Roy Greenfeld, and Answer.AI team", email = "info@answer.ai"}]
+keywords = ['nbdev', 'jupyter', 'notebook', 'python']
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = []
 
-[tool.uv]
-cache-keys = [{ file = "pyproject.toml" }, { file = "settings.ini" }, { file = "setup.py" }]
+[project.urls]
+Repository = "https://github.com/answerdotai/fastsql"
+Documentation = "https://answerdotai.github.io/fastsql"
+
+[project.entry-points.nbdev]
+fastsql = "fastsql._modidx:d"
+
+[tool.setuptools.dynamic]
+version = {attr = "fastsql.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["fastsql"]
+
+[tool.nbdev]
+nbs_path = '.'
+recursive = false
+custom_sidebar = false
