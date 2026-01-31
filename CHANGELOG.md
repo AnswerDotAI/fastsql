@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 2.1.2
+
+### New Features
+
+- add engine kwargs ([#28](https://github.com/AnswerDotAI/fastsql/pull/28)), thanks to [@comhar](https://github.com/comhar)
+
+
 ## 2.1.1
 
 ### New Features
