@@ -4,7 +4,8 @@
 __all__ = ['DEFAULT', 'Default', 'Database', 'DBTable', 'database', 'all_dcs', 'create_mod', 'get_typ', 'NotFoundError',
            'MissingPrimaryKey', 'Meta']
 
-# %% ../00_core.ipynb #1e5e8057
+# %% ../00_core.ipynb #dcb0c8ec
+from contextlib import contextmanager
 from dataclasses import dataclass, is_dataclass, MISSING, fields, field, make_dataclass
 from enum import Enum
 from pathlib import Path
@@ -17,6 +18,7 @@ from fastcore.xtras import dataclass_src
 from itertools import starmap
 
 import sqlparse, sqlalchemy as sa, subprocess
+
 
 # %% ../00_core.ipynb #950f634b
 class Default:
@@ -45,25 +47,37 @@ class Database:
         self.meta = sa.MetaData()
         self.meta.reflect(bind=self.engine)
         self.meta.bind = self.engine
-        self.conn = self.engine.connect()
-        self.meta.conn = self.conn
+        self.meta.db = self
         self._tables = {}
-
-    def execute(self, st, params=None, opts=None): return self.conn.execute(st, params, execution_options=opts)
-
-    def close(self): self.conn.close()
 
     def __repr__(self): return f"Database({self.conn_str})"
 
 
-# %% ../00_core.ipynb #f120bed1
+# %% ../00_core.ipynb #0d7b1fcc
 @patch
-def q(self: Database, sql: str, **params):
-    "Query database with raw SQL and optional parameters. Returns list of dicts."
-    result = self.execute(sa.text(sql), params=params)
-    if result.returns_rows: return list(map(dict, result.mappings()))
-    return []
+@contextmanager
+def conn(self:Database):
+    with self.engine.connect() as conn:
+        try: 
+            yield conn
+            conn.commit()
+        except: 
+            conn.rollback()
+            raise
 
+
+# %% ../00_core.ipynb #4ad6d9b1
+@patch
+def execute(self:Database, sql:str, **params):
+    with self.conn() as conn: return conn.execute(sql, params or {})
+
+# %% ../00_core.ipynb #6d350240
+@patch
+def q(self:Database, sql:str, **params):
+    "Query database with raw SQL and optional parameters. Returns list of dicts."
+    with self.conn() as conn:
+        r = conn.execute(sa.text(sql), params or {})
+        return list(map(dict, r.mappings())) if r.returns_rows else []
 
 # %% ../00_core.ipynb #50dff7a6
 class DBTable:
@@ -83,10 +97,6 @@ class DBTable:
 
     def __str__(self):
         return f'"{self.table.name}"'
-
-    @property
-    def conn(self):
-        return self.db.conn
 
     def xtra(self, **kwargs):
         "Set `xtra_id`"
@@ -268,34 +278,22 @@ def upsert(
     record = {**record, **self.xtra_id}
     dialect = self.db.engine.dialect.name
     if dialect in ("sqlite", "postgresql"):
-        if dialect == "sqlite":
-            from sqlalchemy.dialects.sqlite import insert as dialect_insert
-        else:
-            from sqlalchemy.dialects.postgresql import insert as dialect_insert
+        if dialect == "sqlite": from sqlalchemy.dialects.sqlite import insert as dialect_insert
+        else: from sqlalchemy.dialects.postgresql import insert as dialect_insert
         ins = dialect_insert(self.table).values(**record)
-        stmt = ins.on_conflict_do_update(index_elements=pk, set_=record).returning(
-            *self.table.columns
-        )
-        row = self.conn.execute(stmt).one()
-        self.conn.commit()
+        stmt = ins.on_conflict_do_update(index_elements=pk, set_=record).returning(*self.table.columns)
+        with self.db.conn() as conn: row = conn.execute(stmt).one()
         return _row_to_obj(self, row)
     if dialect in ("mysql", "mariadb"):
         from sqlalchemy.dialects.mysql import insert as dialect_insert
-
         ins = dialect_insert(self.table).values(**record)
         stmt = ins.on_duplicate_key_update(**record)
-        result = self.conn.execute(stmt)
-        self.conn.commit()
         try:
-            row = result.one()
-            return _row_to_obj(self, row)
-        except Exception:
-            return self.get([record[k] for k in pk])
+            with self.db.conn() as conn: return _row_to_obj(self, conn.execute(stmt).one())            
+        except Exception: return self.get([record[k] for k in pk])
     existing = None
-    try:
-        existing = self.get([record[k] for k in pk])
-    except NotFoundError:
-        pass
+    try: existing = self.get([record[k] for k in pk])
+    except NotFoundError: pass
     if existing: return self.update(record)
     return self.insert(record)
 
@@ -595,11 +593,7 @@ def insert(
     record = {**record, **kwargs}
     if not record: return {}
     record = {**record, **self.xtra_id}
-    result = self.conn.execute(
-        sa.insert(self.table).values(**record).returning(*self.table.columns)
-    )
-    row = result.one()
-    self.conn.commit()
+    with self.db.conn() as conn: row = conn.execute(sa.insert(self.table).values(**record).returning(*self.table.columns)).one()    
     return _row_to_obj(self, row)
 
 
@@ -640,12 +634,9 @@ def insert_all(
         self.result = []
         return self
     stmt = sa.insert(self.table).returning(*self.table.columns)
-    result = self.conn.execute(stmt, recs)
-    rows = result.fetchall()
-    self.conn.commit()
+    with self.db.conn() as conn: rows = conn.execute(stmt, recs).fetchall()
     self.result = [_row_to_obj(self, r) for r in rows]
     return self
-
 
 # %% ../00_core.ipynb #e03a5c0a
 def _bind_where(where, where_args):
@@ -698,8 +689,7 @@ def count_where(
 ) -> int:
     stmt = sa.select(sa.func.count()).select_from(self.table)
     if where: stmt = stmt.where(_where(where, where_args, **kw))
-    return int(self.conn.execute(stmt).scalar_one())
-
+    with self.db.conn() as conn: return int(conn.execute(stmt).scalar_one())
 
 # %% ../00_core.ipynb #24e25a12
 @patch(as_prop=True)
@@ -734,7 +724,7 @@ def rows_where(
     if order_by: query = query.order_by(sa.text(order_by))
     if limit is not None: query = query.limit(limit)
     if offset is not None: query = query.offset(offset)
-    rows = self.conn.execute(query).mappings().all()
+    with self.db.conn() as conn: rows = conn.execute(query).mappings().all()
     for row in rows: yield dict(row)
 
 
@@ -845,12 +835,11 @@ def get(
     if len(cols) != len(vals): raise NotFoundError(f"Need {len(cols)} pk")
     cond = sa.and_(*[col == val for col, val in zip(cols, vals)])
     qry = sa.select(self.table).where(cond)
-    result = self.conn.execute(qry).first()
+    with self.db.conn() as conn: result = conn.execute(qry).first()
     if not result:
         if default is UNSET: raise NotFoundError()
         return default
     return _row_to_obj(self, result, as_cls=as_cls)
-
 
 @patch
 def __getitem__(self: DBTable, key):
@@ -898,12 +887,8 @@ def update(
     if pk_values is None: pk_values = [d[o.name] for o in self.table.primary_key]
     else: pk_values = listify(pk_values)
     qry = self._pk_where("update", pk_values).values(**d).returning(*self.table.columns)
-    result = self.conn.execute(qry)
-    if (row := result.one_or_none()) is None:
-        self.conn.rollback()
-        raise NotFoundError()
-
-    self.conn.commit()
+    with self.db.conn() as conn:
+        if (row := conn.execute(qry).one_or_none()) is None: raise NotFoundError()
     return _row_to_obj(self, row)
 
 # %% ../00_core.ipynb #433e6a31
@@ -919,8 +904,7 @@ def update_where(
     "Update rows matching `where` with `updates`. Returns updated rows."
     stmt = self.table.update().values(**updates)
     if where: stmt = stmt.where(_where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw))
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
+    with self.db.conn() as conn: rows = conn.execute(stmt.returning(*self.table.columns)).fetchall()
     return [_row_to_obj(self, r) for r in rows]
 
 
@@ -940,8 +924,7 @@ def update_where(
         stmt = stmt.where(
             _where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw)
         )
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
+    with self.db.conn() as conn: rows = conn.execute(stmt.returning(*self.table.columns)).fetchall()
     return [_row_to_obj(self, r) for r in rows]
 
 
@@ -949,11 +932,7 @@ def update_where(
 @patch
 def delete(self: DBTable, key):
     "Delete item with PK `key` and return the deleted object"
-    result = self.conn.execute(
-        self._pk_where("delete", key).returning(*self.table.columns)
-    )
-    row = result.one()
-    self.conn.commit()
+    with self.db.conn() as conn: row = conn.execute(self._pk_where("delete", key).returning(*self.table.columns)).one()
     return _row_to_obj(self, row)
 
 
@@ -968,8 +947,7 @@ def delete_where(
 ):
     stmt = self.table.delete()
     if where: stmt = stmt.where(_where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw))
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
+    with self.db.conn() as conn: rows = conn.execute(stmt.returning(*self.table.columns)).fetchall()
     return [_row_to_obj(self, r) for r in rows]
 
 
@@ -995,7 +973,6 @@ def drop(self: DBTable, ignore: bool = False):
     "Drop this table from the database"
     try:
         self.table.drop(self.db.engine)
-        self.conn.commit()
         if self.table.name in self.db._tables: del self.db._tables[self.table.name]
         if self.table.name in self.db.meta.tables: self.db.meta.remove(self.table)
     except Exception as e:
@@ -1034,19 +1011,19 @@ def _get_migrations(mdir):
 def migrate(self:Database, mdir):
     if '_meta' not in self.t: self._add_meta()
     cver = self.version
-    for v, p in _get_migrations(mdir)[self.version:]:
-        try:
-            if p.suffix == '.sql':
-                for stmt in filter(str.strip, sqlparse.split(p.read_text())): self.execute(sa.text(stmt))
-            elif p.suffix == '.py':
-                subprocess.run([sys.executable, p, self.conn_str], check=True)
-            self.version = v
-            self.conn.commit()
-            print(f"Applied migration {v}: {p.name}")
-        except Exception as e:
-            self.conn.rollback()
-            raise e
-    self.conn.commit()
+    with self.conn() as conn:
+        for v, p in _get_migrations(mdir)[self.version:]:
+            try:
+                if p.suffix == '.sql': 
+                    for stmt in filter(str.strip, sqlparse.split(p.read_text())): conn.execute(sa.text(stmt))
+                elif p.suffix == '.py': subprocess.run([sys.executable, p, self.conn_str], check=True)
+                self.version = v
+                conn.commit()
+                print(f"Applied migration {v}: {p.name}")
+            except Exception as e:
+                conn.rollback()
+                raise e
+        conn.commit()
     cls_map = {nm: tbl.cls for nm, tbl in self._tables.items() if tbl.cls}
     self._tables.clear()
     self.meta.clear()
@@ -1091,33 +1068,21 @@ def tuples(self: CursorResult, nm="Row"):
     nt = namedtuple(nm, self.keys())
     return [nt(**o) for o in rs]
 
-
 @patch
 def sql(self: Connection, statement, nm="Row", *args, **kwargs):
     "Execute `statement` string and return results (if any)"
     if isinstance(statement, str): statement = text(statement)
     t = self.execute(statement)
-    try:
-        return t.tuples()
-    except ResourceClosedError:
-        pass  # statement didn't return anything
-
+    try: return t.tuples()
+    except ResourceClosedError: pass  # statement didn't return anything
 
 @patch
 def sql(self: MetaData, statement, *args, **kwargs):
     "Execute `statement` string and return `DataFrame` of results (if any)"
-    return self.conn.sql(statement, *args, **kwargs)
-
+    with self.db.conn() as conn: return conn.sql(statement, *args, **kwargs)
 
 # %% ../00_core.ipynb #e2359ec9
 @patch
 def get(self: Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
-    return self.metadata.conn.sql(self.select().where(where).limit(limit))
-
-
-# %% ../00_core.ipynb #2802f9e0
-@patch
-def close(self: MetaData):
-    "Close the connection"
-    self.conn.close()
+    with self.metadata.db.conn() as conn: return conn.sql(self.select().where(where).limit(limit))
