@@ -10,11 +10,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Union, Iterable, Generator, List, Tuple, Dict, get_args
 
-from sqlalchemy.orm import Session
+from contextlib import contextmanager
+import contextvars, threading
 from fastcore.utils import *
-from fastcore.test import test_fail, test_eq
 from fastcore.xtras import dataclass_src
-from itertools import starmap
 
 import sqlparse, sqlalchemy as sa, subprocess
 
@@ -24,6 +23,8 @@ class Default:
 
 
 DEFAULT = Default()
+
+_ctx_conn = contextvars.ContextVar('fastsql_conn', default=None)
 
 
 # %% ../00_core.ipynb #4a52cb19
@@ -45,23 +46,46 @@ class Database:
         self.meta = sa.MetaData()
         self.meta.reflect(bind=self.engine)
         self.meta.bind = self.engine
-        self.conn = self.engine.connect()
-        self.meta.conn = self.conn
-        self._tables = {}
+        self._tables, self._tables_lock = {}, threading.Lock()
 
-    def execute(self, st, params=None, opts=None): return self.conn.execute(st, params, execution_options=opts)
+    @contextmanager
+    def conn(self, write=False):
+        "Yield a connection; uses current tx connection if present."
+        if conn := _ctx_conn.get(): yield conn; return
+        cm = self.engine.begin() if write else self.engine.connect()
+        with cm as conn: yield conn
 
-    def close(self): self.conn.close()
+    @contextmanager
+    def tx(self):
+        "Transaction scope; reuses current conn, uses SAVEPOINT when nested."
+        if conn := _ctx_conn.get():
+            with conn.begin_nested(): yield self
+            return
+        with self.engine.begin() as conn:
+            tok = _ctx_conn.set(conn)
+            try: yield self
+            finally: _ctx_conn.reset(tok)
 
-    def __repr__(self): return f"Database({self.conn_str})"
+    def execute(self, st, params=None, opts=None):
+        "Execute `st` and return buffered results or rowcount"
+        with self.conn(write=True) as conn:
+            res = conn.execute(st, params, execution_options=opts)
+            return res.mappings().all() if res.returns_rows else res.rowcount
+
+    def close(self):
+        self.engine.dispose()
+
+    def __repr__(self):
+        return f"Database({self.conn_str})"
 
 
 # %% ../00_core.ipynb #f120bed1
 @patch
 def q(self: Database, sql: str, **params):
     "Query database with raw SQL and optional parameters. Returns list of dicts."
-    result = self.execute(sa.text(sql), params=params)
-    if result.returns_rows: return list(map(dict, result.mappings()))
+    res = self.execute(sa.text(sql), params=params)
+    if isinstance(res, list):
+        return list(map(dict, res))
     return []
 
 
@@ -71,10 +95,38 @@ class DBTable:
 
     def __init__(self, table: sa.Table, db: Database, cls, _exists=None):
         store_attr()
+        self._xtra_var = contextvars.ContextVar(f'xtra_{self.table.name}_{id(self)}', default={})
+        self._result_var = contextvars.ContextVar(f'result_{self.table.name}_{id(self)}', default=[])
         self.xtra_id, self.result = {}, []
         if len(table.columns) > 0:
             table.create(self.db.engine, checkfirst=True)
             self._exists = True
+
+    @property
+    def xtra_id(self): return self._xtra_var.get()
+
+    @xtra_id.setter
+    def xtra_id(self, v): self._xtra_var.set(v or {})
+
+    @property
+    def result(self): return self._result_var.get()
+
+    @result.setter
+    def result(self, v): self._result_var.set(v or [])
+
+    def _one(self, stmt, params=None, write=False):
+        with self.db.conn(write) as conn: return conn.execute(stmt, params).one()
+
+    def _one_or_none(self, stmt, params=None, write=False):
+        with self.db.conn(write) as conn: return conn.execute(stmt, params).one_or_none()
+
+    def _all(self, stmt, params=None, write=False, mappings=False):
+        with self.db.conn(write) as conn:
+            res = conn.execute(stmt, params)
+            return res.mappings().all() if mappings else res.fetchall()
+
+    def _scalar(self, stmt, params=None, write=False):
+        with self.db.conn(write) as conn: return conn.execute(stmt, params).scalar_one()
 
     def __repr__(self):
         if self._exists is False or (self._exists is None and len(self.table.columns) == 0):
@@ -84,10 +136,6 @@ class DBTable:
     def __str__(self):
         return f'"{self.table.name}"'
 
-    @property
-    def conn(self):
-        return self.db.conn
-
     def xtra(self, **kwargs):
         "Set `xtra_id`"
         self.xtra_id = kwargs
@@ -95,9 +143,7 @@ class DBTable:
 
 # %% ../00_core.ipynb #647933f2
 @patch(as_prop=True)
-def t(self: DBTable):
-    return self.table, self.table.c
-
+def t(self: DBTable): return self.table, self.table.c
 
 # %% ../00_core.ipynb #9e105008
 @patch(as_prop=True)
@@ -114,24 +160,26 @@ def schema(self: DBTable):
 # %% ../00_core.ipynb #a0faa16a
 @patch
 def table(self: Database, nm: str, cls=None):
-    if nm in self._tables: return self._tables[nm]
+    # Thread-safe cache: multiple requests can hit this concurrently.
+    with self._tables_lock:
+        if nm in self._tables: return self._tables[nm]
 
-    if nm in self.meta.tables:
-        tbl = self.meta.tables[nm]
-        exists = True
-    else:
-        inspector = sa.inspect(self.engine)
-        if nm in inspector.get_table_names() or nm in inspector.get_view_names():
-            tbl = sa.Table(nm, self.meta, autoload_with=self.engine)
+        if nm in self.meta.tables:
+            tbl = self.meta.tables[nm]
             exists = True
         else:
-            tbl = sa.Table(nm, self.meta)
-            exists = False
+            inspector = sa.inspect(self.engine)
+            if nm in inspector.get_table_names() or nm in inspector.get_view_names():
+                tbl = sa.Table(nm, self.meta, autoload_with=self.engine)
+                exists = True
+            else:
+                tbl = sa.Table(nm, self.meta)
+                exists = False
 
-    if cls is None and hasattr(tbl, "cls"): cls = tbl.cls
-    res = DBTable(tbl, self, cls, _exists=exists)
-    self._tables[nm] = res
-    return res
+        if cls is None and hasattr(tbl, "cls"): cls = tbl.cls
+        res = DBTable(tbl, self, cls, _exists=exists)
+        self._tables[nm] = res
+        return res
 
 
 # %% ../00_core.ipynb #33f7426a
@@ -144,7 +192,7 @@ def __getitem__(self: Database, nm: str):
 def database(path, wal=True, **kwargs) -> Any:
     "Create a `Database` from a path or connection string"
     conn_str = _db_str(path)
-    db = Database(conn_str)
+    db = Database(conn_str, engine_kws=kwargs)
     if wal and str(conn_str).startswith("sqlite:"): db.execute(sa.text("PRAGMA journal_mode=WAL"))
     return db
 
@@ -276,21 +324,17 @@ def upsert(
         stmt = ins.on_conflict_do_update(index_elements=pk, set_=record).returning(
             *self.table.columns
         )
-        row = self.conn.execute(stmt).one()
-        self.conn.commit()
-        return _row_to_obj(self, row)
+        return _row_to_obj(self, self._one(stmt, write=True))
     if dialect in ("mysql", "mariadb"):
         from sqlalchemy.dialects.mysql import insert as dialect_insert
 
         ins = dialect_insert(self.table).values(**record)
         stmt = ins.on_duplicate_key_update(**record)
-        result = self.conn.execute(stmt)
-        self.conn.commit()
-        try:
-            row = result.one()
-            return _row_to_obj(self, row)
-        except Exception:
-            return self.get([record[k] for k in pk])
+        with self.db.conn(True) as conn:
+            try: row = conn.execute(stmt).one()
+            except Exception: row = None
+        if row is not None: return _row_to_obj(self, row)
+        return self.get([record[k] for k in pk])
     existing = None
     try:
         existing = self.get([record[k] for k in pk])
@@ -391,14 +435,10 @@ def create(
 
 # %% ../00_core.ipynb #0089aca8
 @patch
-def table_names(self: Database):
-    return sa.inspect(self.engine).get_table_names()
-
+def table_names(self: Database): return sa.inspect(self.engine).get_table_names()
 
 @patch
-def view_names(self: Database):
-    return sa.inspect(self.engine).get_view_names()
-
+def view_names(self: Database): return sa.inspect(self.engine).get_view_names()
 
 # %% ../00_core.ipynb #7f00cf84
 @patch
@@ -595,12 +635,8 @@ def insert(
     record = {**record, **kwargs}
     if not record: return {}
     record = {**record, **self.xtra_id}
-    result = self.conn.execute(
-        sa.insert(self.table).values(**record).returning(*self.table.columns)
-    )
-    row = result.one()
-    self.conn.commit()
-    return _row_to_obj(self, row)
+    stmt = sa.insert(self.table).values(**record).returning(*self.table.columns)
+    return _row_to_obj(self, self._one(stmt, write=True))
 
 
 # %% ../00_core.ipynb #367b8d35
@@ -640,10 +676,7 @@ def insert_all(
         self.result = []
         return self
     stmt = sa.insert(self.table).returning(*self.table.columns)
-    result = self.conn.execute(stmt, recs)
-    rows = result.fetchall()
-    self.conn.commit()
-    self.result = [_row_to_obj(self, r) for r in rows]
+    self.result = [_row_to_obj(self, r) for r in self._all(stmt, recs, write=True)]
     return self
 
 
@@ -697,8 +730,8 @@ def count_where(
     **kw,
 ) -> int:
     stmt = sa.select(sa.func.count()).select_from(self.table)
-    if where: stmt = stmt.where(_where(where, where_args, **kw))
-    return int(self.conn.execute(stmt).scalar_one())
+    if where or self.xtra_id or kw: stmt = stmt.where(_where(where, where_args, self.xtra_id, **kw))
+    return int(self._scalar(stmt))
 
 
 # %% ../00_core.ipynb #24e25a12
@@ -734,7 +767,7 @@ def rows_where(
     if order_by: query = query.order_by(sa.text(order_by))
     if limit is not None: query = query.limit(limit)
     if offset is not None: query = query.offset(offset)
-    rows = self.conn.execute(query).mappings().all()
+    rows = self._all(query, write=False, mappings=True)
     for row in rows: yield dict(row)
 
 
@@ -845,8 +878,7 @@ def get(
     if len(cols) != len(vals): raise NotFoundError(f"Need {len(cols)} pk")
     cond = sa.and_(*[col == val for col, val in zip(cols, vals)])
     qry = sa.select(self.table).where(cond)
-    result = self.conn.execute(qry).first()
-    if not result:
+    if not (result := self._one_or_none(qry)):
         if default is UNSET: raise NotFoundError()
         return default
     return _row_to_obj(self, result, as_cls=as_cls)
@@ -898,12 +930,7 @@ def update(
     if pk_values is None: pk_values = [d[o.name] for o in self.table.primary_key]
     else: pk_values = listify(pk_values)
     qry = self._pk_where("update", pk_values).values(**d).returning(*self.table.columns)
-    result = self.conn.execute(qry)
-    if (row := result.one_or_none()) is None:
-        self.conn.rollback()
-        raise NotFoundError()
-
-    self.conn.commit()
+    if (row := self._one_or_none(qry, write=True)) is None: raise NotFoundError()
     return _row_to_obj(self, row)
 
 # %% ../00_core.ipynb #433e6a31
@@ -918,30 +945,9 @@ def update_where(
 ) -> list:
     "Update rows matching `where` with `updates`. Returns updated rows."
     stmt = self.table.update().values(**updates)
-    if where: stmt = stmt.where(_where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw))
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
-    return [_row_to_obj(self, r) for r in rows]
-
-
-# %% ../00_core.ipynb #d2106980
-@patch
-def update_where(
-    self: DBTable,
-    updates: dict,
-    where: str | None = None,
-    where_args: dict | Iterable | None = None,
-    xtra: dict | None = None,
-    **kw,
-) -> list:
-    "Update rows matching `where` with `updates`. Returns updated rows."
-    stmt = self.table.update().values(**updates)
-    if where:
-        stmt = stmt.where(
-            _where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw)
-        )
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
+    xtra = xtra or getattr(self, 'xtra_id', {})
+    if where or xtra or kw: stmt = stmt.where(_where(where, where_args, xtra, **kw))
+    rows = self._all(stmt.returning(*self.table.columns), write=True)
     return [_row_to_obj(self, r) for r in rows]
 
 
@@ -949,12 +955,8 @@ def update_where(
 @patch
 def delete(self: DBTable, key):
     "Delete item with PK `key` and return the deleted object"
-    result = self.conn.execute(
-        self._pk_where("delete", key).returning(*self.table.columns)
-    )
-    row = result.one()
-    self.conn.commit()
-    return _row_to_obj(self, row)
+    stmt = self._pk_where('delete', key).returning(*self.table.columns)
+    return _row_to_obj(self, self._one(stmt, write=True))
 
 
 # %% ../00_core.ipynb #06a6e82c
@@ -967,9 +969,9 @@ def delete_where(
     **kw,
 ):
     stmt = self.table.delete()
-    if where: stmt = stmt.where(_where(where, where_args, xtra or getattr(self, "xtra_id", {}), **kw))
-    rows = self.conn.execute(stmt.returning(*self.table.columns)).fetchall()
-    self.conn.commit()
+    xtra = xtra or getattr(self, 'xtra_id', {})
+    if where or xtra or kw: stmt = stmt.where(_where(where, where_args, xtra, **kw))
+    rows = self._all(stmt.returning(*self.table.columns), write=True)
     return [_row_to_obj(self, r) for r in rows]
 
 
@@ -994,8 +996,7 @@ def __contains__(
 def drop(self: DBTable, ignore: bool = False):
     "Drop this table from the database"
     try:
-        self.table.drop(self.db.engine)
-        self.conn.commit()
+        with self.db.conn(True) as conn: self.table.drop(conn)
         if self.table.name in self.db._tables: del self.db._tables[self.table.name]
         if self.table.name in self.db.meta.tables: self.db.meta.remove(self.table)
     except Exception as e:
@@ -1033,25 +1034,21 @@ def _get_migrations(mdir):
 @patch
 def migrate(self:Database, mdir):
     if '_meta' not in self.t: self._add_meta()
-    cver = self.version
     for v, p in _get_migrations(mdir)[self.version:]:
-        try:
-            if p.suffix == '.sql':
+        if p.suffix == '.sql':
+            with self.tx():
                 for stmt in filter(str.strip, sqlparse.split(p.read_text())): self.execute(sa.text(stmt))
-            elif p.suffix == '.py':
-                subprocess.run([sys.executable, p, self.conn_str], check=True)
+                self.version = v
+        elif p.suffix == '.py':
+            subprocess.run([sys.executable, p, self.conn_str], check=True)
             self.version = v
-            self.conn.commit()
-            print(f"Applied migration {v}: {p.name}")
-        except Exception as e:
-            self.conn.rollback()
-            raise e
-    self.conn.commit()
-    cls_map = {nm: tbl.cls for nm, tbl in self._tables.items() if tbl.cls}
+        print(f"Applied migration {v}: {p.name}")
+
     self._tables.clear()
     self.meta.clear()
     self.meta.reflect(bind=self.engine)
     for tbl in self.t: tbl.dataclass()
+
 
 # %% ../00_core.ipynb #bd8573a8
 from fastcore.net import urlsave
@@ -1099,25 +1096,29 @@ def sql(self: Connection, statement, nm="Row", *args, **kwargs):
     t = self.execute(statement)
     try:
         return t.tuples()
-    except ResourceClosedError:
+    except sa.exc.ResourceClosedError:
         pass  # statement didn't return anything
 
 
 @patch
 def sql(self: MetaData, statement, *args, **kwargs):
-    "Execute `statement` string and return `DataFrame` of results (if any)"
-    return self.conn.sql(statement, *args, **kwargs)
+    "Execute `statement` string and return results (if any)"
+    if conn := _ctx_conn.get(): return conn.sql(statement, *args, **kwargs)
+    eng = getattr(self, 'bind', None)
+    if eng is None: raise AttributeError('MetaData.bind is not set')
+    with eng.connect() as conn: return conn.sql(statement, *args, **kwargs)
 
 
 # %% ../00_core.ipynb #e2359ec9
 @patch
 def get(self: Table, where=None, limit=None):
     "Select from table, optionally limited by `where` and `limit` clauses"
-    return self.metadata.conn.sql(self.select().where(where).limit(limit))
+    return self.metadata.sql(self.select().where(where).limit(limit))
 
 
 # %% ../00_core.ipynb #2802f9e0
 @patch
 def close(self: MetaData):
     "Close the connection"
-    self.conn.close()
+    eng = getattr(self, 'bind', None)
+    if eng is not None: eng.dispose()
