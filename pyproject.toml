@@ -33,3 +33,6 @@ allowed_cell_metadata_keys = ['solveit_ai']
 nbs_path = '.'
 recursive = false
 custom_sidebar = false
+
+[tool.chkstyle]
+skip_paths = ["_modidx.py"]
