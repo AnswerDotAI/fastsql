@@ -16,8 +16,7 @@ from fastsql import *
 from fastsql.core import NotFoundError
 ```
 
-We demonstrate `fastsql`‘s features here using the ’chinook’ sample
-database.
+We demonstrate `fastsql`‘s features here using the ’chinook’ sample database.
 
 ``` python
 url = 'https://github.com/lerocha/chinook-database/raw/master/ChinookDatabase/DataSources/Chinook_Sqlite.sqlite'
@@ -66,11 +65,9 @@ dt['Artist','Album','Track','Genre','MediaType']
      <Table Genre (GenreId, Name)>,
      <Table MediaType (MediaTypeId, Name)>]
 
-It also provides auto-complete in Jupyter, IPython, and nearly any other
-interactive Python environment:
+It also provides auto-complete in Jupyter, IPython, and nearly any other interactive Python environment:
 
-<img src="index_files/figure-commonmark/5134025a-1-image.png"
-width="180" />
+<img src="index_files/figure-commonmark/5134025a-1-image.png" width="180" />
 
 You can check if a table is in the database already:
 
@@ -91,11 +88,9 @@ ac
 
 Auto-complete works for columns too:
 
-<img src="index_files/figure-commonmark/954ad8db-1-image.png"
-width="140" />
+<img src="index_files/figure-commonmark/954ad8db-1-image.png" width="140" />
 
-Columns, tables, and view stringify in a format suitable for including
-in SQL statements. That means you can use auto-complete in f-strings.
+Columns, tables, and view stringify in a format suitable for including in SQL statements. That means you can use auto-complete in f-strings.
 
 ``` python
 qry = f"select * from {artist} where {ac.Name} like 'AC/%'"
@@ -133,8 +128,7 @@ acca_dacca
 
 ## Dataclass support
 
-A `dataclass` type with the names, types, and defaults of the tables is
-created using `dataclass()`:
+A `dataclass` type with the names, types, and defaults of the tables is created using `dataclass()`:
 
 ``` python
 album_dc = album.dataclass()
@@ -155,9 +149,7 @@ album_obj
 
     Album(AlbumId=1, Title='For Those About To Rock We Salute You', ArtistId=1)
 
-You can get the definition of the dataclass using fastcore’s
-`dataclass_src` – everything is treated as nullable, in order to handle
-auto-generated database values:
+You can get the definition of the dataclass using fastcore’s `dataclass_src` – everything is treated as nullable, in order to handle auto-generated database values:
 
 ``` python
 src = dataclass_src(album_dc)
@@ -172,10 +164,7 @@ class Album:
     ArtistId: int | None = UNSET
 ```
 
-Because `dataclass()` is dynamic, you won’t get auto-complete in editors
-like vscode – it’ll only work in dynamic environments like Jupyter and
-IPython. For editor support, you can export the full set of dataclasses
-to a module, which you can then import from:
+Because `dataclass()` is dynamic, you won’t get auto-complete in editors like vscode – it’ll only work in dynamic environments like Jupyter and IPython. For editor support, you can export the full set of dataclasses to a module, which you can then import from:
 
 ``` python
 create_mod(db, 'db_dc')
@@ -198,10 +187,7 @@ dt.Track[1]
 
     Track(TrackId=1, Name='For Those About To Rock (We Salute You)', AlbumId=1, MediaTypeId=1, GenreId=1, Composer='Angus Young, Malcolm Young, Brian Johnson', Milliseconds=343719, Bytes=11170334, UnitPrice=Decimal('0.99'))
 
-There’s a shortcut to select from a table – just call it as a function.
-If you’ve previously called `dataclass()`, returned iterms will be
-constructed using that class by default. There’s lots of params you can
-check out, such as `limit`:
+There’s a shortcut to select from a table – just call it as a function. If you’ve previously called `dataclass()`, returned iterms will be constructed using that class by default. There’s lots of params you can check out, such as `limit`:
 
 ``` python
 album(limit=2)
@@ -210,8 +196,7 @@ album(limit=2)
     [Album(AlbumId=1, Title='For Those About To Rock We Salute You', ArtistId=1),
      Album(AlbumId=2, Title='Balls to the Wall', ArtistId=2)]
 
-Pass a truthy value as `with_pk` and you’ll get tuples of primary keys
-and records:
+Pass a truthy value as `with_pk` and you’ll get tuples of primary keys and records:
 
 ``` python
 album(with_pk=1, limit=2)
@@ -229,9 +214,7 @@ album[5]
 
     Album(AlbumId=5, Title='Big Ones', ArtistId=3)
 
-If you set `xtra` fields, then indexing is also filtered by those. As a
-result, for instance in this case, nothing is returned since album 5 is
-not created by artist 1:
+If you set `xtra` fields, then indexing is also filtered by those. As a result, for instance in this case, nothing is returned since album 5 is not created by artist 1:
 
 ``` python
 album.xtra(ArtistId=1)
@@ -253,8 +236,7 @@ album()
 
 ## Core design
 
-The following methods accept `**kwargs`, passing them along to the first
-`dict` param:
+The following methods accept `**kwargs`, passing them along to the first `dict` param:
 
 - `create`
 - `transform`
@@ -296,8 +278,7 @@ CREATE TABLE "Cats" (
 )
 ```
 
-It we set `xtra` then the additional fields are used for `insert`,
-`update`, and `delete`:
+It we set `xtra` then the additional fields are used for `insert`, `update`, and `delete`:
 
 ``` python
 cats.xtra(uid=2)
@@ -312,8 +293,7 @@ cat
 
     {'id': 1, 'name': 'meow', 'weight': 6.0, 'uid': 2}
 
-Using `**` in `update` here doesn’t actually achieve anything, since we
-can just pass a `dict` directly – it’s just to show that it works:
+Using `**` in `update` here doesn’t actually achieve anything, since we can just pass a `dict` directly – it’s just to show that it works:
 
 ``` python
 cat['name'] = "moo"
@@ -326,8 +306,7 @@ cats()
 
 Attempts to update or insert with xtra fields are ignored.
 
-An error is raised if there’s an attempt to update a record not matching
-`xtra` fields:
+An error is raised if there’s an attempt to update a record not matching `xtra` fields:
 
 ``` python
 cats.xtra(uid=1)
@@ -355,10 +334,7 @@ cats
 
     <Table Cats (id, name, weight, uid)>
 
-Alternatively, you can create a table from a class. If it’s not already
-a dataclass, it will be converted into one. In either case, the
-dataclass will be created (or modified) so that `None` can be passed to
-any field (this is needed to support fields such as automatic row ids).
+Alternatively, you can create a table from a class. If it’s not already a dataclass, it will be converted into one. In either case, the dataclass will be created (or modified) so that `None` can be passed to any field (this is needed to support fields such as automatic row ids).
 
 ``` python
 class Cat: id:int; name:str; weight:float; uid:int
@@ -391,8 +367,7 @@ cats.insert(cat)
 
 ## Manipulating data
 
-We try to make the following methods as flexible as possible. Wherever
-possible, they support Python dictionaries, dataclasses, and classes.
+We try to make the following methods as flexible as possible. Wherever possible, they support Python dictionaries, dataclasses, and classes.
 
 ### .insert()
 
@@ -423,8 +398,7 @@ cat = cats.insert(Cat(name='Jerry', weight=5.2))
 
 ### .update()
 
-Updates a record using a Python dict, dataclass, or object, and returns
-an instance of the updated record.
+Updates a record using a Python dict, dataclass, or object, and returns an instance of the updated record.
 
 Updating from a Python dict:
 
@@ -496,8 +470,7 @@ petfoods.update(pf)
 
     PetFood(catid=1, food='tuna', qty=3)
 
-You can also use `upsert` to update if the key exists, or insert
-otherwise:
+You can also use `upsert` to update if the key exists, or insert otherwise:
 
 ``` python
 pf.qty=1
@@ -526,12 +499,9 @@ petfoods()
 
 ## Migrations
 
-FastSQL supports schema migrations to evolve your database over time.
-Migrations are SQL or Python files stored in a migrations directory,
-numbered sequentially.
+FastSQL supports schema migrations to evolve your database over time. Migrations are SQL or Python files stored in a migrations directory, numbered sequentially.
 
-The database tracks the current schema version in a `_meta` table. When
-you run migrations, only unapplied migrations are executed.
+The database tracks the current schema version in a `_meta` table. When you run migrations, only unapplied migrations are executed.
 
 Let’s create a migration to add a priority field to our cats table:
 
@@ -563,8 +533,7 @@ db.migrate('cat_migrations')
 
     Applied migration 1: 1-add_color_to_cat.sql
 
-The database version is now updated, and the table structure reflects
-the change:
+The database version is now updated, and the table structure reflects the change:
 
 ``` python
 print(f"New version: {db.version}")
@@ -588,8 +557,7 @@ CREATE TABLE cat (
 )
 ```
 
-Existing records now have the priority field with the default value, and
-new records can use it too:
+Existing records now have the priority field with the default value, and new records can use it too:
 
 ``` python
 cats.insert({'name': 'Mr. Snuggles', 'weight': 8.5, 'color': 'tuxedo'})
@@ -601,17 +569,13 @@ cats()
      Cat(id=3, name='Tom', weight=10.2, uid=None, color='unknown'),
      Cat(id=4, name='Mr. Snuggles', weight=8.5, uid=None, color='tuxedo')]
 
-If you run `migrate()` again, it won’t reapply migrations that have
-already been applied:
+If you run `migrate()` again, it won’t reapply migrations that have already been applied:
 
 ``` python
 db.migrate('cat_migrations')  # No output - migration already applied
 ```
 
-Migrations can also be Python scripts. Create a file like
-`2-update_data.py` that accepts the database connection string as a
-command line argument to perform more complex data transformations.
-Python migration scripts must handle their own commits:
+Migrations can also be Python scripts. Create a file like `2-update_data.py` that accepts the database connection string as a command line argument to perform more complex data transformations. Python migration scripts must handle their own commits:
 
 ``` python
 # migrations/2-update_data.py
