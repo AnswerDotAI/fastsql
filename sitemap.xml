@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/test_insert.html</loc>
+    <lastmod>2026-09-04T04:53:43.715Z</lastmod>
+  </url>
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/CHANGELOG.html</loc>
+    <lastmod>2026-09-04T04:53:14.468Z</lastmod>
+  </url>
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/test_upsert.html</loc>
+    <lastmod>2026-09-04T04:53:43.758Z</lastmod>
+  </url>
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/index.html</loc>
+    <lastmod>2026-09-04T04:53:43.776Z</lastmod>
+  </url>
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/test_update.html</loc>
+    <lastmod>2026-09-04T04:53:43.702Z</lastmod>
+  </url>
+  <url>
+    <loc>https://answerdotai.github.io/fastsql/core.html</loc>
+    <lastmod>2026-09-04T04:53:43.983Z</lastmod>
+  </url>
+</urlset>
